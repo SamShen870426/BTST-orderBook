@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
-import type { OrderBookWsMessage, QuoteLevel } from '../types';
-import { WS_ORDERBOOK_URL, ORDERBOOK_TOPIC, MAX_DISPLAY_ROWS } from '../constants';
+import Decimal from 'decimal.js';
+import type { OrderBookWsMessage, OrderBookData, QuoteLevel } from '../types';
+import { WS_ORDERBOOK_URL, getOrderBookTopic, MAX_DISPLAY_ROWS } from '../constants';
 
 type PriceMap = Map<number, number>;
 
@@ -27,24 +28,24 @@ function buildQuoteLevels(
   if (side === 'sell') {
     entries.sort((a, b) => a[0] - b[0]);
     const sliced = entries.slice(0, limit);
-    let cumulative = 0;
+    let cumulative = new Decimal(0);
     const levels: QuoteLevel[] = sliced.map(([price, size]) => {
-      cumulative += size;
-      return { price, size, total: cumulative };
+      cumulative = cumulative.plus(size);
+      return { price, size, total: cumulative.toNumber() };
     });
     return levels.reverse();
   }
 
   entries.sort((a, b) => b[0] - a[0]);
   const sliced = entries.slice(0, limit);
-  let cumulative = 0;
+  let cumulative = new Decimal(0);
   return sliced.map(([price, size]) => {
-    cumulative += size;
-    return { price, size, total: cumulative };
+    cumulative = cumulative.plus(size);
+    return { price, size, total: cumulative.toNumber() };
   });
 }
 
-export function useOrderBook() {
+export function useOrderBook(groupLevel: number) {
   const wsRef = useRef<WebSocket | null>(null);
   const bidsMap = useRef<PriceMap>(new Map());
   const asksMap = useRef<PriceMap>(new Map());
@@ -55,6 +56,9 @@ export function useOrderBook() {
   const batchTimerRef = useRef<ReturnType<typeof setInterval>>();
   const activityTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const mountedRef = useRef(true);
+  const topicRef = useRef(getOrderBookTopic(groupLevel));
+  const pendingDeltasRef = useRef<OrderBookData[]>([]);
+  const awaitingSnapshotRef = useRef(false);
 
   const [orderBook, setOrderBook] = useState<OrderBookState>({
     asks: [],
@@ -86,10 +90,31 @@ export function useOrderBook() {
     }));
   }, []);
 
+  const clearBookState = useCallback(() => {
+    bidsMap.current.clear();
+    asksMap.current.clear();
+    lastSeqNum.current = null;
+    dirtyRef.current = false;
+  }, []);
+
+  const resubscribe = useCallback((ws: WebSocket) => {
+    const topic = topicRef.current;
+    ws.send(JSON.stringify({ op: 'unsubscribe', args: [topic] }));
+    clearBookState();
+    pendingDeltasRef.current = [];
+    awaitingSnapshotRef.current = true;
+    setTimeout(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ op: 'subscribe', args: [topic] }));
+      }
+    }, 200);
+  }, [clearBookState]);
+
   const connect = useCallback(() => {
     if (!mountedRef.current) return;
 
     wsRef.current?.close();
+    clearBookState();
     setStatus('connecting');
 
     const ws = new WebSocket(WS_ORDERBOOK_URL);
@@ -105,7 +130,7 @@ export function useOrderBook() {
     ws.onopen = () => {
       retryCount.current = 0;
       setStatus('connected');
-      ws.send(JSON.stringify({ op: 'subscribe', args: [ORDERBOOK_TOPIC] }));
+      ws.send(JSON.stringify({ op: 'subscribe', args: [topicRef.current] }));
       resetActivityTimer();
     };
 
@@ -120,27 +145,39 @@ export function useOrderBook() {
         const { data } = msg;
 
         if (data.type === 'snapshot') {
-          bidsMap.current.clear();
-          asksMap.current.clear();
+          clearBookState();
           applyLevels(data.bids, bidsMap.current);
           applyLevels(data.asks, asksMap.current);
           lastSeqNum.current = data.seqNum;
+
+          if (awaitingSnapshotRef.current) {
+            const buffered = pendingDeltasRef.current
+              .filter((d) => d.prevSeqNum >= data.seqNum)
+              .sort((a, b) => a.seqNum - b.seqNum);
+
+            for (const delta of buffered) {
+              if (delta.prevSeqNum === lastSeqNum.current) {
+                applyLevels(delta.bids, bidsMap.current);
+                applyLevels(delta.asks, asksMap.current);
+                lastSeqNum.current = delta.seqNum;
+              }
+            }
+            pendingDeltasRef.current = [];
+            awaitingSnapshotRef.current = false;
+          }
+
           flush();
           return;
         }
 
         if (data.type === 'delta') {
+          if (awaitingSnapshotRef.current) {
+            pendingDeltasRef.current.push(data);
+            return;
+          }
+
           if (lastSeqNum.current !== null && data.prevSeqNum !== lastSeqNum.current) {
-            ws.send(JSON.stringify({ op: 'unsubscribe', args: [ORDERBOOK_TOPIC] }));
-            bidsMap.current.clear();
-            asksMap.current.clear();
-            lastSeqNum.current = null;
-            dirtyRef.current = false;
-            setTimeout(() => {
-              if (ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ op: 'subscribe', args: [ORDERBOOK_TOPIC] }));
-              }
-            }, 200);
+            resubscribe(ws);
             return;
           }
 
@@ -151,16 +188,7 @@ export function useOrderBook() {
           const bestBid = Math.max(...Array.from(bidsMap.current.keys()));
           const bestAsk = Math.min(...Array.from(asksMap.current.keys()));
           if (bestBid >= bestAsk) {
-            ws.send(JSON.stringify({ op: 'unsubscribe', args: [ORDERBOOK_TOPIC] }));
-            bidsMap.current.clear();
-            asksMap.current.clear();
-            lastSeqNum.current = null;
-            dirtyRef.current = false;
-            setTimeout(() => {
-              if (ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ op: 'subscribe', args: [ORDERBOOK_TOPIC] }));
-              }
-            }, 200);
+            resubscribe(ws);
             return;
           }
 
@@ -188,7 +216,26 @@ export function useOrderBook() {
     ws.onerror = () => {
       ws.close();
     };
-  }, [applyLevels, flush, setStatus]);
+  }, [applyLevels, flush, setStatus, clearBookState, resubscribe]);
+
+  // Handle grouping level changes without full reconnect
+  useEffect(() => {
+    const newTopic = getOrderBookTopic(groupLevel);
+    const oldTopic = topicRef.current;
+
+    if (newTopic === oldTopic) return;
+
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ op: 'unsubscribe', args: [oldTopic] }));
+      clearBookState();
+      setOrderBook((prev) => ({ ...prev, asks: [], bids: [] }));
+      topicRef.current = newTopic;
+      ws.send(JSON.stringify({ op: 'subscribe', args: [newTopic] }));
+    } else {
+      topicRef.current = newTopic;
+    }
+  }, [groupLevel, clearBookState]);
 
   useEffect(() => {
     mountedRef.current = true;

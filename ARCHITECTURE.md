@@ -1,6 +1,6 @@
 # Order Book — 系統架構與技術文件
 
-> **技術棧**：React 18 + TypeScript + Vite  
+> **技術棧**：React 18 + TypeScript + Vite + Decimal.js  
 > **資料來源**：BTSE Futures WebSocket API  
 > **市場代號**：BTCPFC（BTC 永續合約）
 
@@ -9,45 +9,56 @@
 ## 1. 系統架構總覽
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    WebSocket Layer                       │
-│  ┌────────────────────┐  ┌────────────────────────┐     │
-│  │ OrderBook WS       │  │ Trade History WS        │     │
-│  │ wss://.../oss/     │  │ wss://.../futures       │     │
-│  │ update:BTCPFC_0    │  │ tradeHistoryApi:BTCPFC  │     │
-│  └────────┬───────────┘  └──────────┬─────────────┘     │
-│           │                         │                    │
-│     ┌─────▼──────────┐        ┌─────▼──────┐            │
-│     │  Snapshot/Delta │        │  Last Price │            │
-│     │  SeqNum 驗證    │        │  方向偵測   │            │
-│     └─────┬──────────┘        └─────┬──────┘            │
-│           │                         │                    │
-│     ┌─────▼──────────┐              │                    │
-│     │ 50ms Batching   │              │                    │
-│     │ dirtyRef 機制   │              │                    │
-│     └─────┬──────────┘              │                    │
-└───────────┼─────────────────────────┼────────────────────┘
-            │                         │
-┌───────────▼─────────────────────────▼────────────────────┐
-│                    State Layer                            │
-│  ┌──────────────────────────────────────────────┐        │
-│  │ OrderBook Component (容器)                    │        │
-│  │  • committedRef：前一幀的顯示快照             │        │
-│  │  • Diff 偵測：isNew / prevSize 計算           │        │
-│  │  • barPercent 計算                            │        │
-│  └──────────────────┬───────────────────────────┘        │
-└─────────────────────┼────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                     WebSocket Layer                           │
+│  ┌─────────────────────────┐  ┌────────────────────────┐     │
+│  │ OrderBook WS            │  │ Trade History WS        │     │
+│  │ wss://.../oss/futures   │  │ wss://.../futures       │     │
+│  │ update:BTCPFC_0         │  │ tradeHistoryApi:BTCPFC  │     │
+│  └────────┬────────────────┘  └──────────┬─────────────┘     │
+│           │                              │                    │
+│     ┌─────▼──────────┐            ┌──────▼──────┐            │
+│     │  Snapshot/Delta │            │  Last Price  │            │
+│     │  SeqNum 驗證    │            │  方向偵測    │            │
+│     └─────┬──────────┘            └──────┬──────┘            │
+│           │                              │                    │
+│     ┌─────▼──────────┐                   │                    │
+│     │ 50ms Batching   │                   │                    │
+│     │ dirtyRef 機制   │                   │                    │
+│     └─────┬──────────┘                   │                    │
+│           │                              │                    │
+│     ┌─────▼────────────────────────┐     │                    │
+│     │ 連線韌性                      │     │                    │
+│     │ • 活動偵測（10s 無訊息斷線） │     │                    │
+│     │ • 指數退避重連（1s~30s）     │     │                    │
+│     │ • Tab 切換自動恢復           │     │                    │
+│     │ • Race condition 防護        │     │                    │
+│     └─────┬────────────────────────┘     │                    │
+└───────────┼──────────────────────────────┼────────────────────┘
+            │                              │
+┌───────────▼──────────────────────────────▼────────────────────┐
+│                     State Layer                                │
+│  ┌──────────────────────────────────────────────┐             │
+│  │ OrderBook Component (容器)                    │             │
+│  │  • committedRef：前一幀的顯示快照             │             │
+│  │  • Diff 偵測：isNew / prevSize 計算           │             │
+│  │  • barPercent 計算（精度截斷防 memo 失效）    │             │
+│  │  • Decimal.js：浮點精度保證                   │             │
+│  │  • 連線狀態 UI：Loading / Disconnected        │             │
+│  └──────────────────┬───────────────────────────┘             │
+└─────────────────────┼─────────────────────────────────────────┘
                       │
-┌─────────────────────▼────────────────────────────────────┐
-│                    Render Layer                            │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐                │
-│  │ QuoteRow  │  │ QuoteRow  │  │ LastPrice │                │
-│  │ memo +    │  │ memo +    │  │ memo      │                │
-│  │ areEqual  │  │ areEqual  │  │           │                │
-│  │ ×16       │  │           │  │           │                │
-│  └──────────┘  └──────────┘  └──────────┘                │
-│  CSS @keyframes 動畫：row-flash / size-flash              │
-└──────────────────────────────────────────────────────────┘
+┌─────────────────────▼─────────────────────────────────────────┐
+│                     Render Layer                               │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐                     │
+│  │ QuoteRow  │  │ QuoteRow  │  │ LastPrice │                     │
+│  │ memo +    │  │ memo +    │  │ memo      │                     │
+│  │ areEqual  │  │ areEqual  │  │           │                     │
+│  │ ×16       │  │           │  │           │                     │
+│  └──────────┘  └──────────┘  └──────────┘                     │
+│  CSS @keyframes 動畫：row-flash / size-flash                   │
+│  斷線時 stale class（opacity 0.45）                            │
+└───────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -62,15 +73,6 @@
 - 首次連線收到 `type: "snapshot"`（50 個價位的完整快照）
 - 後續收到 `type: "delta"`（只有變動的價位）
 - 用 `Map<price, size>` 維護本地完整狀態，delta 進來時做 upsert（size=0 則刪除）
-
-```typescript
-// delta 的 size=0 代表該價位已被撤單
-if (size === 0) {
-  map.delete(price);
-} else {
-  map.set(price, size);
-}
-```
 
 ### 2.2 SeqNum 序號驗證 + 自動恢復
 
@@ -91,15 +93,7 @@ if (size === 0) {
 2. `setInterval(50ms)` 輪詢 `dirtyRef`，為 true 才 flush 到 React state
 3. 多條 delta 被合併成一次 render
 
-```
-WebSocket:  d1 d2 d3 d4 d5 d6 d7 d8 d9 d10 ...
-            ↓  ↓  ↓                ↓  ↓
-Map 寫入:   ✓  ✓  ✓                ✓  ✓
-            [── 50ms ──]           [── 50ms ──]
-Render:     flush(d1~d3合併)       flush(d9~d10合併)
-```
-
-**效果**：每秒最多 20 次 render（20Hz），遠低於原始的 50~100 次。
+**效果**：每秒最多 20 次 render（20Hz），遠低於原始的 50~100 次。50ms 介於 Bybit（20ms）和 Binance（100ms）之間。
 
 ### 2.4 幀間 Diff 偵測
 
@@ -108,30 +102,16 @@ Render:     flush(d1~d3合併)       flush(d9~d10合併)
 **解法**：
 - 用 `committedRef` 在 `useEffect`（commit phase）儲存上一幀的顯示快照
 - 避免在 render phase 更新 ref（StrictMode 會跑兩次 render，破壞比對）
-- `isNew`：當前 price 不在上一幀的 8 筆 `displayedPrices` Set 中
+- `isNew`：當前 price 不在上一幀**畫面顯示的 8 筆** `displayedPrices` Set 中
 - `prevSize`：從上一幀的 `sizes` Map 中以 price 為 key 取得
 
-### 2.5 React.memo + 自訂 areEqual
+### 2.5 React.memo + 自訂 areEqual + barPercent 精度截斷
 
 **痛點**：16 個 QuoteRow 在每次 batch flush 時全部 re-render。
 
 **解法**：
-```typescript
-function areEqual(prev, next) {
-  return (
-    prev.quote.price === next.quote.price &&
-    prev.quote.size === next.quote.size &&
-    prev.quote.total === next.quote.total &&
-    prev.barPercent === next.barPercent &&
-    prev.prevSize === next.prevSize &&
-    prev.isNew === next.isNew
-  );
-}
-export default memo(QuoteRowInner, areEqual);
-```
-
-- 預設 `memo` 對 `quote` 物件做 shallow compare 永遠 `false`（新物件引用）
-- 自訂 `areEqual` 做值比較，只有 price/size/total 真正變了才 re-render
+- 自訂 `areEqual` 逐欄位值比較（避免物件引用比較永遠 false）
+- `barPercent` 四捨五入到 0.1%（`Math.round(x * 1000) / 10`），防止 `sumTotals` 微變導致所有行 barPercent 連動變化
 - **效果**：如果只有 2 行有變動，只 re-render 2 個 QuoteRow 而非 16 個
 
 ### 2.6 CSS @keyframes 閃爍動畫
@@ -143,11 +123,66 @@ export default memo(QuoteRowInner, areEqual);
 - 動畫從 `opacity 0.5` 的亮色瞬間出現，600ms 內漸退到 `transparent`
 - 閃爍結束後移除 class（透過 `setTimeout`），避免動畫殘留
 
-```css
-@keyframes size-flash-green {
-  0%   { background-color: rgba(0, 177, 93, 0.5); }
-  100% { background-color: transparent; }
-}
+### 2.7 連線韌性（Resilience）
+
+**痛點**：WS 斷線後用戶看到的資料是過期的，且無法自動恢復。
+
+**解法 — 四層防護機制**：
+
+| 機制 | 觸發條件 | 行為 |
+|------|----------|------|
+| **活動偵測** | 10s 內沒收到任何 WS 訊息 | 主動 `close()` 觸發重連（取代 ping/pong，因 OSS 端點不支援） |
+| **指數退避重連** | WS `onclose` 事件 | 1s → 2s → 4s → ... → max 30s，成功後歸零 |
+| **Tab 切換** | `visibilitychange` 事件 | 回到 tab 時，若 WS 已斷則立即重連（跳過退避等待） |
+| **Race condition 防護** | `connect()` 建新連線時 | 舊 WS 的 `onclose`/`onmessage` 透過 `wsRef.current !== ws` 檢查直接忽略 |
+
+**UI 狀態**：
+- `connecting`（首次無資料）→ Spinner + "Loading order book..."
+- `connecting`（有舊資料）→ Header badge「Connecting...」
+- `connected` → 正常顯示
+- `disconnected` → Header 紅色 badge「Reconnecting...」+ 資料 opacity 0.45
+
+### 2.8 Decimal.js 浮點精度
+
+**痛點**：JavaScript 的 `number` 使用 IEEE 754 雙精度浮點，金融計算會產生精度誤差。
+
+**為什麼交易所必須用**：
+- `0.1 + 0.2 = 0.30000000000000004`（不是 0.3）
+- 累加 8 筆 size 時，誤差會逐層放大
+- 在 Total 欄位顯示「不精確的數字」對交易所用戶而言是不可接受的
+
+**解法**：用 `Decimal.js` 取代原生 `number` 做所有涉及金額/數量的加法運算，最終 `toNumber()` 輸出給 React 渲染。
+
+### 2.9 Price Aggregation（價格聚合）
+
+**痛點**：固定精度（0.1）的 order book 在價格劇烈波動時，前 8 筆可能分佈很密，看不出深度全貌。
+
+**解法**：
+- BTSE API 原生支援 grouping level 0~8（對 BTC：0.1 / 0.5 / 1 / 5 / 10 ...）
+- topic 格式為 `update:BTCPFC_{level}`，切換 level 就能改變聚合精度
+- 切換時不需重建 WS 連線：unsubscribe 舊 topic → 清空 Map → subscribe 新 topic
+- 清空 `committedRef`，避免新舊精度的價格誤判為「新報價」觸發動畫
+
+### 2.10 Snapshot Buffer（重訂閱空窗期防護）
+
+**痛點**：seqNum 不連續 → unsubscribe → 等待 → re-subscribe → 新 snapshot 到達之前，可能有 delta 已經先飛進來但被忽略，造成資料缺口。
+
+**解法**：
+- 設 `awaitingSnapshotRef = true` 標記進入等待狀態
+- 等待期間收到的 delta 暫存到 `pendingDeltasRef` 緩衝區
+- 新 snapshot 到達後，從緩衝區中篩出 `prevSeqNum >= snapshot.seqNum` 的 delta
+- 依 seqNum 排序後逐一套用，確保零資料丟失
+
+```
+時間線:
+  seqNum 不連續 → resubscribe
+  [─── 等待新 snapshot ───]
+  收到 delta(seq=103) → 暫存
+  收到 delta(seq=104) → 暫存
+  收到 snapshot(seq=102) → 套用
+    → 從暫存中找 prevSeqNum≥102 的 delta
+    → 套用 delta(103)，再套用 delta(104)
+    → 本地 seqNum = 104，資料完整 ✓
 ```
 
 ---
@@ -155,12 +190,14 @@ export default memo(QuoteRowInner, areEqual);
 ## 3. 資料流完整路徑
 
 ```
-BTSE Diffusion Server
+BTSE Server
   │
   ├─ OrderBook WS (wss://.../oss/futures)
   │    │
   │    ▼
-  │  onmessage → parse JSON
+  │  onmessage
+  │    ├─ wsRef.current !== ws？→ 忽略（race condition 防護）
+  │    ├─ 重置活動偵測計時器（10s）
   │    │
   │    ├─ type=snapshot → 清空 Map → applyLevels → 立即 flush()
   │    │
@@ -176,7 +213,7 @@ BTSE Diffusion Server
   │         ▼
   │  OrderBook 元件 render
   │    ├─ 讀取 committedRef（上一幀快照）
-  │    ├─ 計算 isNew / prevSize / barPercent
+  │    ├─ 計算 isNew / prevSize / barPercent（精度截斷）
   │    ├─ 產生 QuoteRow props
   │    └─ useEffect → 更新 committedRef（本幀快照）
   │         │
@@ -184,8 +221,13 @@ BTSE Diffusion Server
   │  QuoteRow (×16, memo + areEqual)
   │    ├─ props 沒變 → 跳過 render
   │    └─ props 有變 → render
-  │         ├─ isNew=true → 加 flash-row-{color} class → 600ms 後移除
-  │         └─ size 變動 → 加 flash-size-{color} class → 600ms 後移除
+  │         ├─ isNew=true → flash-row-{color} class → 600ms 後移除
+  │         └─ size 變動 → flash-size-{color} class → 600ms 後移除
+  │
+  │  onclose
+  │    ├─ wsRef.current !== ws？→ 忽略
+  │    ├─ setStatus('disconnected') → UI 變淡
+  │    └─ setTimeout(connect, delay) → 指數退避重連
   │
   └─ Trade History WS (wss://.../futures)
        │
@@ -212,15 +254,15 @@ order-book/
 └── src/
     ├── main.tsx              # StrictMode 入口
     ├── App.tsx
-    ├── index.css             # Design Token + @keyframes 動畫
+    ├── index.css             # Design Token + @keyframes 動畫 + stale/loading 樣式
     ├── types.ts              # OrderBookWsMessage / TradeData / QuoteLevel
     ├── constants.ts          # WS URL / Topic / 顏色常數
-    ├── utils.ts              # 千分位格式化
+    ├── utils.ts              # 千分位格式化 + Decimal.js 精度計算
     ├── hooks/
-    │   ├── useOrderBook.ts   # WS 連線 + Map 狀態 + batch + seqNum
-    │   └── useLastPrice.ts   # WS 連線 + 方向判定
+    │   ├── useOrderBook.ts   # WS + Map + batch + seqNum + 重連 + 活動偵測
+    │   └── useLastPrice.ts   # WS + 方向判定 + 重連
     └── components/
-        ├── OrderBook.tsx     # 容器：diff 偵測 + barPercent 計算
+        ├── OrderBook.tsx     # 容器：diff 偵測 + barPercent + 狀態 UI
         ├── QuoteRow.tsx      # memo + areEqual + 閃爍動畫
         └── LastPrice.tsx     # memo + 方向顏色
 ```
@@ -229,50 +271,31 @@ order-book/
 
 ## 5. 如果要上線到真實交易所，還需要什麼？
 
-### 5.1 連線韌性（Resilience）
-
-| 缺口 | 說明 | 建議方案 |
-|------|------|----------|
-| **自動重連** | 目前 WS 斷線後不會重連 | 指數退避重連（1s → 2s → 4s → max 30s），搭配 `navigator.onLine` 偵測 |
-| **心跳檢測** | 無法偵測「靜默斷線」（TCP 連線在但伺服器不送資料） | 定時發送 `ping`，超時未收到 `pong` 則主動斷開重連 |
-| **多市場切換** | 目前寫死 BTCPFC | 支援動態切換 symbol，切換時 unsubscribe 舊 topic + 清空 Map |
-
-### 5.2 效能與規模化
+### 5.1 效能與規模化
 
 | 缺口 | 說明 | 建議方案 |
 |------|------|----------|
 | **Web Worker** | JSON parse 和 Map 操作在主執行緒 | 將 WS 連線和資料處理移到 Worker，主執行緒只負責 render |
 | **虛擬化** | 目前只顯示 8 筆不需要，但若擴展到 50 筆 | 用 `react-window` 做虛擬捲動 |
-| **crossed book 偵測** | `Math.max(...Array.from(map.keys()))` 在 50 個 key 時 OK，但萬級價位會慢 | 維護排序陣列或用 `SortedMap` |
 
-### 5.3 資料正確性
-
-| 缺口 | 說明 | 建議方案 |
-|------|------|----------|
-| **浮點精度** | `parseFloat("0.1") + parseFloat("0.2") !== 0.3` | 用 `Decimal.js` 或整數運算（乘以精度倍數） |
-| **REST fallback** | WS 長時間無 snapshot 時無法驗證本地狀態 | 定時用 REST API 拉取 orderbook 做校正 |
-| **seqNum 溢位** | seqNum 持續增長，理論上可能溢位 | 實務上 Number.MAX_SAFE_INTEGER 足夠（9×10¹⁵），但需知道此邊界 |
-
-### 5.4 使用者體驗
+### 5.2 使用者體驗
 
 | 缺口 | 說明 | 建議方案 |
 |------|------|----------|
-| **Loading 狀態** | 首次連線時無資料顯示空白 | 加 skeleton loading 或 spinner |
-| **錯誤狀態** | WS 連線失敗無視覺提示 | 頂部 banner 顯示「連線中...」/「已斷線」 |
 | **Grouping** | 只支援預設精度（`_0`） | 支援使用者選擇價格聚合精度（0.1 / 0.5 / 1 / 5 / 10） |
 | **深度切換** | 固定 8 筆 | 讓使用者選擇顯示 8 / 15 / 25 筆 |
+| **多市場切換** | 目前寫死 BTCPFC | 支援動態切換 symbol |
 | **RWD** | 固定 392px 寬度 | 響應式設計，手機版可能只顯示 Price + Size |
 
-### 5.5 測試與監控
+### 5.3 測試與監控
 
 | 缺口 | 說明 | 建議方案 |
 |------|------|----------|
 | **單元測試** | 無測試 | 對 `buildQuoteLevels`、`applyLevels`、`formatNumber` 寫 Jest 測試 |
 | **整合測試** | 無法驗證 WS 互動 | 用 `mock-socket` 模擬 WS server，測試 snapshot → delta → resubscribe 流程 |
 | **E2E 測試** | 無法驗證動畫效果 | Playwright 錄製關鍵路徑，搭配視覺回歸測試 |
-| **效能監控** | 無指標 | 追蹤 render 次數、batch 命中率、WS 延遲等 metrics |
 
-### 5.6 安全與合規
+### 5.4 安全與合規
 
 | 缺口 | 說明 | 建議方案 |
 |------|------|----------|
@@ -290,5 +313,11 @@ order-book/
 | 為什麼 50ms 而非 requestAnimationFrame？ | rAF 是 16ms，batch 效果差；50ms 介於 Bybit(20ms) 和 Binance(100ms) |
 | StrictMode 下 ref 更新有什麼陷阱？ | render 跑兩次，ref 在第一次被改寫，第二次讀到的是當前值而非前一幀 |
 | memo 的 areEqual 為什麼不直接比較 quote 物件？ | quote 每次 flush 都是新物件（新引用），shallow compare 永遠 false |
+| barPercent 為什麼要精度截斷？ | sumTotals 微變導致所有行 barPercent 連動變化，memo 全部失效 |
 | 為什麼新報價比對用顯示的 8 筆而非整本 50 筆？ | 使用者關心的是「畫面上新出現的」，不是整本書的新增 |
 | 動畫為什麼用 CSS class 而非 inline style？ | @keyframes 可以做漸退效果，inline style + transition 太柔和不明顯 |
+| 為什麼 OSS 端點不用 ping/pong？ | OSS 端點不支援字串 ping/pong，改用活動偵測（有收到任何訊息=活著） |
+| WS 重連時怎麼防止 race condition？ | `onclose`/`onmessage` 檢查 `wsRef.current !== ws`，被取代的舊連線事件一律忽略 |
+| 為什麼用 Decimal.js？ | JS 浮點 `0.1+0.2≠0.3`，金融場景累加精度會逐層放大，交易所不能顯示不精確的數字 |
+| Grouping 切換時為什麼不重建 WS？ | 同一條 WS 連線可以切換 topic，省去重新握手的延遲和資源浪費 |
+| 重訂閱時如何確保零資料丟失？ | 用 Snapshot Buffer：暫存空窗期的 delta，snapshot 到達後依 seqNum 順序回放 |

@@ -1,6 +1,7 @@
-import { useRef, useEffect, useMemo } from 'react';
+import { useRef, useEffect, useMemo, useState, useCallback } from 'react';
 import { useOrderBook } from '../hooks/useOrderBook';
 import { useLastPrice } from '../hooks/useLastPrice';
+import { GROUPING_OPTIONS } from '../constants';
 import QuoteRow from './QuoteRow';
 import LastPrice from './LastPrice';
 
@@ -12,7 +13,8 @@ interface PrevSnapshot {
 }
 
 export default function OrderBook() {
-  const { asks, bids, status } = useOrderBook();
+  const [groupLevel, setGroupLevel] = useState(0);
+  const { asks, bids, status } = useOrderBook(groupLevel);
   const lastPrice = useLastPrice();
   const committedRef = useRef<PrevSnapshot | null>(null);
 
@@ -26,6 +28,11 @@ export default function OrderBook() {
       bidSizes: new Map(bids.map((q) => [q.price, q.size])),
     };
   }, [asks, bids]);
+
+  const handleGroupChange = useCallback((level: number) => {
+    committedRef.current = null;
+    setGroupLevel(level);
+  }, []);
 
   const sumAskTotals = useMemo(
     () => asks.reduce((sum, q) => sum + q.total, 0),
@@ -83,12 +90,27 @@ export default function OrderBook() {
     <div className="orderbook">
       <div className="orderbook-header">
         <span>Order Book</span>
-        {isDisconnected && (
-          <span className="status-badge disconnected">Reconnecting...</span>
-        )}
-        {status === 'connecting' && asks.length > 0 && (
-          <span className="status-badge connecting">Connecting...</span>
-        )}
+        <div className="header-right">
+          {isDisconnected && (
+            <span className="status-badge disconnected">Reconnecting...</span>
+          )}
+          {status === 'connecting' && asks.length > 0 && (
+            <span className="status-badge connecting">Connecting...</span>
+          )}
+        </div>
+      </div>
+
+      <div className="grouping-bar">
+        <span className="grouping-label">Grouping:</span>
+        {GROUPING_OPTIONS.map((opt) => (
+          <button
+            key={opt.level}
+            className={`grouping-btn${groupLevel === opt.level ? ' active' : ''}`}
+            onClick={() => handleGroupChange(opt.level)}
+          >
+            {opt.label}
+          </button>
+        ))}
       </div>
 
       {isLoading ? (

@@ -1,8 +1,20 @@
 export const WS_ORDERBOOK_URL = 'wss://ws.btse.com/ws/oss/futures';
 export const WS_TRADE_URL = 'wss://ws.btse.com/ws/futures';
-export const ORDERBOOK_TOPIC = 'update:BTCPFC_0';
+export const ORDERBOOK_SYMBOL = 'BTCPFC';
 export const TRADE_TOPIC = 'tradeHistoryApi:BTCPFC';
 export const MAX_DISPLAY_ROWS = 8;
+
+export const GROUPING_OPTIONS = [
+  { level: 0, label: '0.1', step: 0.1 },
+  { level: 1, label: '0.5', step: 0.5 },
+  { level: 2, label: '1', step: 1 },
+  { level: 3, label: '5', step: 5 },
+  { level: 4, label: '10', step: 10 },
+] as const;
+
+export function getOrderBookTopic(groupLevel: number): string {
+  return `update:${ORDERBOOK_SYMBOL}_${groupLevel}`;
+}
 
 export const COLORS = {
   bg: '#131B29',
