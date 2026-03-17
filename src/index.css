@@ -149,6 +149,12 @@ body {
   color: #8698aa;
 }
 
+/* ─── Stale Data ─────────── */
+.quote-section.stale {
+  opacity: 0.45;
+  transition: opacity 0.5s ease;
+}
+
 /* ─── Loading ─────────────── */
 .loading-container {
   display: flex;

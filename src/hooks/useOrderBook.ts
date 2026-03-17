@@ -7,6 +7,7 @@ type PriceMap = Map<number, number>;
 const BATCH_INTERVAL = 50;
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30000;
+const ACTIVITY_TIMEOUT_MS = 10000;
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
 
@@ -52,6 +53,7 @@ export function useOrderBook() {
   const retryCount = useRef(0);
   const retryTimer = useRef<ReturnType<typeof setTimeout>>();
   const batchTimerRef = useRef<ReturnType<typeof setInterval>>();
+  const activityTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const mountedRef = useRef(true);
 
   const [orderBook, setOrderBook] = useState<OrderBookState>({
@@ -93,13 +95,24 @@ export function useOrderBook() {
     const ws = new WebSocket(WS_ORDERBOOK_URL);
     wsRef.current = ws;
 
+    const resetActivityTimer = () => {
+      clearTimeout(activityTimerRef.current);
+      activityTimerRef.current = setTimeout(() => {
+        ws.close();
+      }, ACTIVITY_TIMEOUT_MS);
+    };
+
     ws.onopen = () => {
       retryCount.current = 0;
       setStatus('connected');
       ws.send(JSON.stringify({ op: 'subscribe', args: [ORDERBOOK_TOPIC] }));
+      resetActivityTimer();
     };
 
     ws.onmessage = (event: MessageEvent) => {
+      if (wsRef.current !== ws) return;
+      resetActivityTimer();
+
       try {
         const msg: OrderBookWsMessage = JSON.parse(event.data as string);
         if (!msg.data || !msg.data.type) return;
@@ -159,9 +172,11 @@ export function useOrderBook() {
     };
 
     ws.onclose = () => {
+      clearTimeout(activityTimerRef.current);
       if (!mountedRef.current) return;
-      setStatus('disconnected');
+      if (wsRef.current !== ws) return;
 
+      setStatus('disconnected');
       const delay = Math.min(
         RECONNECT_BASE_MS * Math.pow(2, retryCount.current),
         RECONNECT_MAX_MS
@@ -202,6 +217,7 @@ export function useOrderBook() {
     return () => {
       mountedRef.current = false;
       clearInterval(batchTimerRef.current);
+      clearTimeout(activityTimerRef.current);
       clearTimeout(retryTimer.current);
       wsRef.current?.close();
       wsRef.current = null;

@@ -103,9 +103,9 @@ export default function OrderBook() {
             <span className="quote-cell size">Size</span>
             <span className="quote-cell total">Total</span>
           </div>
-          <div className="quote-section sell-section">{askRows}</div>
+          <div className={`quote-section sell-section${isDisconnected ? ' stale' : ''}`}>{askRows}</div>
           <LastPrice price={lastPrice.price} direction={lastPrice.direction} />
-          <div className="quote-section buy-section">{bidRows}</div>
+          <div className={`quote-section buy-section${isDisconnected ? ' stale' : ''}`}>{bidRows}</div>
         </>
       )}
     </div>
