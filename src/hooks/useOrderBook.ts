@@ -1,9 +1,9 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
-import Decimal from 'decimal.js';
-import type { OrderBookWsMessage, OrderBookData, QuoteLevel } from '../types';
+import type { OrderBookWsMessage, OrderBookData } from '../types';
 import { WS_ORDERBOOK_URL, getOrderBookTopic, MAX_DISPLAY_ROWS } from '../constants';
-
-type PriceMap = Map<number, number>;
+import { applyLevels, buildQuoteLevels } from '../logic/orderBook.logic';
+import type { PriceMap } from '../logic/orderBook.logic';
+import type { QuoteLevel } from '../types';
 
 const BATCH_INTERVAL = 50;
 const RECONNECT_BASE_MS = 1000;
@@ -16,33 +16,6 @@ export interface OrderBookState {
   asks: QuoteLevel[];
   bids: QuoteLevel[];
   status: ConnectionStatus;
-}
-
-function buildQuoteLevels(
-  map: PriceMap,
-  side: 'buy' | 'sell',
-  limit: number
-): QuoteLevel[] {
-  const entries = Array.from(map.entries()).filter(([, size]) => size > 0);
-
-  if (side === 'sell') {
-    entries.sort((a, b) => a[0] - b[0]);
-    const sliced = entries.slice(0, limit);
-    let cumulative = new Decimal(0);
-    const levels: QuoteLevel[] = sliced.map(([price, size]) => {
-      cumulative = cumulative.plus(size);
-      return { price, size, total: cumulative.toNumber() };
-    });
-    return levels.reverse();
-  }
-
-  entries.sort((a, b) => b[0] - a[0]);
-  const sliced = entries.slice(0, limit);
-  let cumulative = new Decimal(0);
-  return sliced.map(([price, size]) => {
-    cumulative = cumulative.plus(size);
-    return { price, size, total: cumulative.toNumber() };
-  });
 }
 
 export function useOrderBook(groupLevel: number) {
@@ -68,18 +41,6 @@ export function useOrderBook(groupLevel: number) {
 
   const setStatus = useCallback((status: ConnectionStatus) => {
     setOrderBook((prev) => (prev.status === status ? prev : { ...prev, status }));
-  }, []);
-
-  const applyLevels = useCallback((levels: [string, string][], map: PriceMap) => {
-    for (const [priceStr, sizeStr] of levels) {
-      const price = parseFloat(priceStr);
-      const size = parseFloat(sizeStr);
-      if (size === 0) {
-        map.delete(price);
-      } else {
-        map.set(price, size);
-      }
-    }
   }, []);
 
   const flush = useCallback(() => {
@@ -216,9 +177,8 @@ export function useOrderBook(groupLevel: number) {
     ws.onerror = () => {
       ws.close();
     };
-  }, [applyLevels, flush, setStatus, clearBookState, resubscribe]);
+  }, [flush, setStatus, clearBookState, resubscribe]);
 
-  // Handle grouping level changes without full reconnect
   useEffect(() => {
     const newTopic = getOrderBookTopic(groupLevel);
     const oldTopic = topicRef.current;

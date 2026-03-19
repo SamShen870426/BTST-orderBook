@@ -1,33 +1,28 @@
 import { memo } from 'react';
 import type { PriceDirection } from '../types';
 import { formatNumber } from '../utils';
-import { COLORS } from '../constants';
+import { getDirectionConfig } from '../logic/lastPrice.logic';
+import * as S from '../styles/lastPrice.style';
 
 interface LastPriceProps {
   price: number | null;
   direction: PriceDirection;
 }
 
-const directionConfig = {
-  up: { color: COLORS.buyPrice, bg: COLORS.priceUpBg, arrow: '↑' },
-  down: { color: COLORS.sellPrice, bg: COLORS.priceDownBg, arrow: '↓' },
-  same: { color: COLORS.textDefault, bg: COLORS.priceSameBg, arrow: '' },
-} as const;
-
 function LastPriceInner({ price, direction }: LastPriceProps) {
+  const config = getDirectionConfig(direction);
+
   if (price === null) {
-    return <div className="last-price-container">--</div>;
+    return <S.Container $bg={config.bg}>--</S.Container>;
   }
 
-  const config = directionConfig[direction];
-
   return (
-    <div className="last-price-container" style={{ backgroundColor: config.bg }}>
-      <span className="last-price-value" style={{ color: config.color }}>
+    <S.Container $bg={config.bg}>
+      <S.PriceValue $color={config.color}>
         {formatNumber(price)}
-        {config.arrow && <span className="last-price-arrow"> {config.arrow}</span>}
-      </span>
-    </div>
+        {config.arrow && <S.Arrow> {config.arrow}</S.Arrow>}
+      </S.PriceValue>
+    </S.Container>
   );
 }
 

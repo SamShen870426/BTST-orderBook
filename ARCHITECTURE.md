@@ -1,6 +1,6 @@
 # Order Book — 系統架構與技術文件
 
-> **技術棧**：React 18 + TypeScript + Vite + Decimal.js  
+> **技術棧**：React 18 + TypeScript + Vite + Styled-Components + Decimal.js + Vitest  
 > **資料來源**：BTSE Futures WebSocket API  
 > **市場代號**：BTCPFC（BTC 永續合約）
 
@@ -50,14 +50,28 @@
                       │
 ┌─────────────────────▼─────────────────────────────────────────┐
 │                     Render Layer                               │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐                     │
-│  │ QuoteRow  │  │ QuoteRow  │  │ LastPrice │                     │
-│  │ memo +    │  │ memo +    │  │ memo      │                     │
-│  │ areEqual  │  │ areEqual  │  │           │                     │
-│  │ ×16       │  │           │  │           │                     │
-│  └──────────┘  └──────────┘  └──────────┘                     │
-│  CSS @keyframes 動畫：row-flash / size-flash                   │
-│  斷線時 stale class（opacity 0.45）                            │
+│  ┌───────────────────────────────────────────┐                 │
+│  │ OrderBookView (Presentation)              │                 │
+│  │  ├─ QuoteRow (memo + areEqual) ×16        │                 │
+│  │  └─ LastPrice (memo)                      │                 │
+│  └───────────────────────────────────────────┘                 │
+│                                                                │
+│  ┌───────────────────────────────────────────┐                 │
+│  │ styles/ (Styled-Components)               │                 │
+│  │  ├─ orderBook.style.ts                    │                 │
+│  │  ├─ quoteRow.style.ts (.attrs for perf)   │                 │
+│  │  ├─ lastPrice.style.ts (.attrs for perf)  │                 │
+│  │  └─ common.style.ts                       │                 │
+│  └───────────────────────────────────────────┘                 │
+│                                                                │
+│  ┌───────────────────────────────────────────┐                 │
+│  │ logic/ (Pure Functions, 100% Testable)    │                 │
+│  │  ├─ orderBook.logic.ts                    │                 │
+│  │  ├─ quoteRow.logic.ts                     │                 │
+│  │  └─ lastPrice.logic.ts                    │                 │
+│  └───────────────────────────────────────────┘                 │
+│                                                                │
+│  __tests__/ → 73 tests（L1 單元 + L2 Hooks + L3 Components）     │
 └───────────────────────────────────────────────────────────────┘
 ```
 
@@ -114,14 +128,23 @@
 - `barPercent` 四捨五入到 0.1%（`Math.round(x * 1000) / 10`），防止 `sumTotals` 微變導致所有行 barPercent 連動變化
 - **效果**：如果只有 2 行有變動，只 re-render 2 個 QuoteRow 而非 16 個
 
-### 2.6 CSS @keyframes 閃爍動畫
+### 2.6 Styled-Components 閃爍動畫 + `.attrs()` 效能優化
 
-**痛點**：用 inline `backgroundColor` + CSS `transition` 的閃爍不夠明顯。
+**痛點 1**：用 inline `backgroundColor` + CSS `transition` 的閃爍不夠明顯。
 
 **解法**：
-- 用 CSS class 切換觸發 `@keyframes` 動畫
+- 用 styled-components 的 `keyframes` helper 定義動畫
+- 透過 `css` tagged template 插值 keyframes 物件（v4+ 要求，不能插入普通字串）
 - 動畫從 `opacity 0.5` 的亮色瞬間出現，600ms 內漸退到 `transparent`
-- 閃爍結束後移除 class（透過 `setTimeout`），避免動畫殘留
+
+**痛點 2**：styled-components 為每個不同的 prop 值產生新 CSS class（如 `width: 21.7%` → 新 class），高頻更新時產生 200+ classes。
+
+**解法**：對頻繁變動的 props 使用 `.attrs()` 將值轉為 inline style：
+- `Bar`：`$width`、`$color` → `.attrs()` → `style={{ width, backgroundColor }}`
+- `PriceCell`：`$color` → `.attrs()` → `style={{ color }}`
+- `LastPrice Container/PriceValue`：`$bg`、`$color` → `.attrs()`
+
+**原則**：不常變的樣式（layout、font-size）用 CSS class，頻繁變的值（width、color）用 `.attrs()` + inline style。
 
 ### 2.7 連線韌性（Resilience）
 
@@ -243,29 +266,80 @@ BTSE Server
 
 ---
 
-## 4. 檔案結構
+## 4. 檔案結構（三層分離架構）
 
 ```
 order-book/
 ├── index.html
 ├── package.json
-├── tsconfig.json            # strict mode + noUncheckedIndexedAccess
+├── ARCHITECTURE.md              # 本文件：系統架構與技術說明
+├── TESTING.md                   # 測試指南：如何使用、寫了哪些測試
+├── tsconfig.json               # strict mode + noUncheckedIndexedAccess
 ├── vite.config.ts
 └── src/
-    ├── main.tsx              # StrictMode 入口
+    ├── main.tsx                 # StrictMode 入口
     ├── App.tsx
-    ├── index.css             # Design Token + @keyframes 動畫 + stale/loading 樣式
-    ├── types.ts              # OrderBookWsMessage / TradeData / QuoteLevel
-    ├── constants.ts          # WS URL / Topic / 顏色常數
-    ├── utils.ts              # 千分位格式化 + Decimal.js 精度計算
-    ├── hooks/
-    │   ├── useOrderBook.ts   # WS + Map + batch + seqNum + 重連 + 活動偵測
-    │   └── useLastPrice.ts   # WS + 方向判定 + 重連
-    └── components/
-        ├── OrderBook.tsx     # 容器：diff 偵測 + barPercent + 狀態 UI
-        ├── QuoteRow.tsx      # memo + areEqual + 閃爍動畫
-        └── LastPrice.tsx     # memo + 方向顏色
+    ├── index.css                # 精簡：只保留 CSS reset + body 基礎樣式
+    ├── types.ts                 # OrderBookWsMessage / TradeData / QuoteLevel
+    ├── constants.ts             # WS URL / Topic / COLORS / GROUPING_OPTIONS
+    ├── utils.ts                 # formatNumber 千分位格式化
+    │
+    ├── styles/                  ← Styled-Components（對應 megatron-slicing 角色）
+    │   ├── common.style.ts      # Spinner, StatusBadge
+    │   ├── orderBook.style.ts   # Wrapper, Header, GroupingBar, QuoteSection, Loading...
+    │   ├── quoteRow.style.ts    # Row, Bar(.attrs), PriceCell(.attrs), SizeCell, TotalCell + keyframes
+    │   └── lastPrice.style.ts   # Container(.attrs), PriceValue(.attrs), Arrow
+    │
+    ├── logic/                   ← 純函數（100% 可單元測試，零 React 依賴）
+    │   ├── orderBook.logic.ts   # buildQuoteLevels, applyLevels, computeBarPercent, buildSnapshot...
+    │   ├── quoteRow.logic.ts    # areEqual, getRowFlashClass, getSizeFlashClass
+    │   └── lastPrice.logic.ts   # computePriceDirection, getDirectionConfig
+    │
+    ├── hooks/                   ← 精簡：只負責 WS 連線 + state 管理
+    │   ├── useOrderBook.ts      # WS + Map + batch + seqNum + 重連 + 活動偵測（import logic/）
+    │   └── useLastPrice.ts      # WS + 方向判定 + 重連（import logic/）
+    │
+    ├── components/              ← Container / Presentation 分離
+    │   ├── OrderBook.tsx        # Container：組合 hooks + logic → props 傳給 View（零 JSX）
+    │   ├── OrderBookView.tsx    # Presentation：純 UI + styled-components（零業務邏輯）
+    │   ├── QuoteRow.tsx         # Presentation：memo + areEqual + 閃爍動畫
+    │   └── LastPrice.tsx        # Presentation：memo + 方向顏色
+    │
+    └── __tests__/               ← 分層測試（Vitest，73 tests）
+        ├── setup.ts
+        ├── helpers/MockWebSocket.ts
+        ├── logic/                   # L1 單元：38 tests
+        │   ├── orderBook.logic.test.ts
+        │   ├── quoteRow.logic.test.ts
+        │   ├── lastPrice.logic.test.ts
+        │   └── utils.test.ts
+        ├── hooks/                   # L2 整合：13 tests（Mock WS）
+        │   ├── useOrderBook.test.ts
+        │   └── useLastPrice.test.ts
+        └── components/               # L3 元件：22 tests
+            ├── OrderBookView.test.tsx
+            ├── LastPrice.test.tsx
+            ├── QuoteRow.test.tsx
+            └── OrderBook.test.tsx
 ```
+
+### 架構分離原則
+
+| 層 | 職責 | 可測試性 | React 依賴 |
+|----|------|----------|-----------|
+| **styles/** | UI 外觀（顏色、佈局、動畫） | N/A | styled-components |
+| **logic/** | 純函數（計算、比較、轉換） | 100% 可直接 `import` 測試 | 零 |
+| **hooks/** | WS 連線、state 管理 | 需 mock WebSocket | React hooks |
+| **components/** | Container 組合邏輯、View 渲染 | 需 render testing | React JSX |
+
+**Container（OrderBook.tsx）**不直接渲染任何 HTML/styled 元件，只負責：
+1. 呼叫 hooks 取得資料和狀態
+2. 呼叫 logic/ 計算衍生值（barPercent、isNew、prevSize）
+3. 把所有結果透過 props 傳給 View
+
+**Presentation（OrderBookView.tsx）**不做任何計算，只負責：
+1. 接收 props 渲染 UI
+2. 使用 styles/ 的 styled-components
 
 ---
 
@@ -291,8 +365,9 @@ order-book/
 
 | 缺口 | 說明 | 建議方案 |
 |------|------|----------|
-| **單元測試** | 無測試 | 對 `buildQuoteLevels`、`applyLevels`、`formatNumber` 寫 Jest 測試 |
-| **整合測試** | 無法驗證 WS 互動 | 用 `mock-socket` 模擬 WS server，測試 snapshot → delta → resubscribe 流程 |
+| ~~單元測試~~ | ~~無測試~~ | ✅ 已完成：logic/ 42 個純函數單元測試 |
+| ~~整合測試~~ | ~~無法驗證 WS 互動~~ | ✅ 已完成：hooks/ 13 個測試，MockWebSocket 模擬 snapshot → delta → resubscribe |
+| **元件測試** | UI 渲染驗證 | ✅ 已完成：components/ 18 個測試，覆蓋 OrderBookView、LastPrice、QuoteRow、OrderBook |
 | **E2E 測試** | 無法驗證動畫效果 | Playwright 錄製關鍵路徑，搭配視覺回歸測試 |
 
 ### 5.4 安全與合規
@@ -321,3 +396,6 @@ order-book/
 | 為什麼用 Decimal.js？ | JS 浮點 `0.1+0.2≠0.3`，金融場景累加精度會逐層放大，交易所不能顯示不精確的數字 |
 | Grouping 切換時為什麼不重建 WS？ | 同一條 WS 連線可以切換 topic，省去重新握手的延遲和資源浪費 |
 | 重訂閱時如何確保零資料丟失？ | 用 Snapshot Buffer：暫存空窗期的 delta，snapshot 到達後依 seqNum 順序回放 |
+| 為什麼用 Container/Presentation 分離？ | Container 負責 hooks + 計算、View 負責渲染，邏輯抽到 logic/ 後 100% 可單元測試 |
+| styled-components 為什麼用 `.attrs()`？ | 頻繁變動的 props（width/color）若用 CSS-in-JS 會產生 200+ classes，`.attrs()` 改用 inline style 避免 class 堆積 |
+| keyframes 為什麼要用 `css` helper 插值？ | styled-components v4+ 不允許在普通模板字串中插入 keyframes 物件，需在 `css` tagged template 中使用 |

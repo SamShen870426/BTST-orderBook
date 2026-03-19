@@ -1,19 +1,14 @@
 import { memo, useEffect, useRef, useState } from 'react';
-import type { QuoteLevel } from '../types';
 import { formatNumber } from '../utils';
 import { COLORS } from '../constants';
-
-interface QuoteRowProps {
-  quote: QuoteLevel;
-  side: 'buy' | 'sell';
-  barPercent: number;
-  prevSize: number | undefined;
-  isNew: boolean;
-}
+import { areEqual, getRowFlashClass, getSizeFlashClass } from '../logic/quoteRow.logic';
+import type { QuoteRowProps } from '../logic/quoteRow.logic';
+import * as S from '../styles/quoteRow.style';
+import type { FlashName } from '../styles/quoteRow.style';
 
 function QuoteRowInner({ quote, side, barPercent, prevSize, isNew }: QuoteRowProps) {
-  const [rowFlashClass, setRowFlashClass] = useState('');
-  const [sizeFlashClass, setSizeFlashClass] = useState('');
+  const [rowFlash, setRowFlash] = useState<FlashName>('');
+  const [sizeFlash, setSizeFlash] = useState<FlashName>('');
   const rowTimer = useRef<ReturnType<typeof setTimeout>>();
   const sizeTimer = useRef<ReturnType<typeof setTimeout>>();
   const isFirstRender = useRef(true);
@@ -25,19 +20,18 @@ function QuoteRowInner({ quote, side, barPercent, prevSize, isNew }: QuoteRowPro
     }
     if (!isNew) return;
 
-    const cls = side === 'buy' ? 'flash-row-green' : 'flash-row-red';
-    setRowFlashClass(cls);
+    setRowFlash(getRowFlashClass(side));
     clearTimeout(rowTimer.current);
-    rowTimer.current = setTimeout(() => setRowFlashClass(''), 600);
+    rowTimer.current = setTimeout(() => setRowFlash(''), 600);
   }, [isNew, side]);
 
   useEffect(() => {
-    if (prevSize === undefined || prevSize === quote.size) return;
+    const cls = getSizeFlashClass(quote.size, prevSize);
+    if (!cls) return;
 
-    const cls = quote.size > prevSize ? 'flash-size-green' : 'flash-size-red';
-    setSizeFlashClass(cls);
+    setSizeFlash(cls);
     clearTimeout(sizeTimer.current);
-    sizeTimer.current = setTimeout(() => setSizeFlashClass(''), 600);
+    sizeTimer.current = setTimeout(() => setSizeFlash(''), 600);
   }, [quote.size, prevSize]);
 
   useEffect(() => {
@@ -51,34 +45,12 @@ function QuoteRowInner({ quote, side, barPercent, prevSize, isNew }: QuoteRowPro
   const barColor = side === 'buy' ? COLORS.buyBar : COLORS.sellBar;
 
   return (
-    <div className={`quote-row ${rowFlashClass}`}>
-      <div
-        className="quote-bar"
-        style={{
-          width: `${barPercent}%`,
-          backgroundColor: barColor,
-        }}
-      />
-      <span className="quote-cell price" style={{ color: priceColor }}>
-        {formatNumber(quote.price)}
-      </span>
-      <span className={`quote-cell size ${sizeFlashClass}`}>
-        {formatNumber(quote.size)}
-      </span>
-      <span className="quote-cell total">{formatNumber(quote.total)}</span>
-    </div>
-  );
-}
-
-function areEqual(prev: QuoteRowProps, next: QuoteRowProps): boolean {
-  return (
-    prev.quote.price === next.quote.price &&
-    prev.quote.size === next.quote.size &&
-    prev.quote.total === next.quote.total &&
-    prev.side === next.side &&
-    prev.barPercent === next.barPercent &&
-    prev.prevSize === next.prevSize &&
-    prev.isNew === next.isNew
+    <S.Row $flash={rowFlash}>
+      <S.Bar $width={barPercent} $color={barColor} />
+      <S.PriceCell $color={priceColor}>{formatNumber(quote.price)}</S.PriceCell>
+      <S.SizeCell $flash={sizeFlash}>{formatNumber(quote.size)}</S.SizeCell>
+      <S.TotalCell>{formatNumber(quote.total)}</S.TotalCell>
+    </S.Row>
   );
 }
 

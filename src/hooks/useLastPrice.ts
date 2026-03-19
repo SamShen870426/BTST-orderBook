@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { TradeHistoryWsMessage, PriceDirection } from '../types';
 import { WS_TRADE_URL, TRADE_TOPIC } from '../constants';
+import { computePriceDirection } from '../logic/lastPrice.logic';
 
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30000;
 
-interface LastPriceState {
+export interface LastPriceState {
   price: number | null;
   direction: PriceDirection;
 }
@@ -40,13 +41,7 @@ export function useLastPrice(): LastPriceState {
         const trade = msg.data[0];
         if (trade === undefined) return;
         const newPrice = trade.price;
-        const prev = prevPriceRef.current;
-
-        let direction: PriceDirection = 'same';
-        if (prev !== null) {
-          if (newPrice > prev) direction = 'up';
-          else if (newPrice < prev) direction = 'down';
-        }
+        const direction = computePriceDirection(prevPriceRef.current, newPrice);
 
         prevPriceRef.current = newPrice;
         setState({ price: newPrice, direction });
