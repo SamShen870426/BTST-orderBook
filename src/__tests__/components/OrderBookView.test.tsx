@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import OrderBookView from '../../components/OrderBookView';
 
@@ -18,8 +18,6 @@ const defaultProps = {
   lastPrice: 100.5,
   lastPriceDirection: 'up' as const,
   status: 'connected' as const,
-  groupLevel: 0,
-  onGroupChange: vi.fn(),
 };
 
 describe('OrderBookView', () => {
@@ -57,23 +55,6 @@ describe('OrderBookView', () => {
   it('should show Connecting badge when reconnecting with stale data', () => {
     render(<OrderBookView {...defaultProps} status="connecting" />);
     expect(screen.getByText('Connecting...')).toBeInTheDocument();
-  });
-
-  it('should render grouping buttons', () => {
-    render(<OrderBookView {...defaultProps} />);
-    expect(screen.getByText('0.1')).toBeInTheDocument();
-    expect(screen.getByText('0.5')).toBeInTheDocument();
-  });
-
-  it('should call onGroupChange when grouping button clicked', () => {
-    const onGroupChange = vi.fn();
-    render(<OrderBookView {...defaultProps} onGroupChange={onGroupChange} />);
-
-    fireEvent.click(screen.getByText('0.5'));
-    expect(onGroupChange).toHaveBeenCalledWith(1);
-
-    fireEvent.click(screen.getByText('10'));
-    expect(onGroupChange).toHaveBeenCalledWith(4);
   });
 
   it('should show last price with arrow', () => {

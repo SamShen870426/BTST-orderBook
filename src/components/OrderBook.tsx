@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo, useState, useCallback } from 'react';
+import { useRef, useEffect, useMemo } from 'react';
 import { useOrderBook } from '../hooks/useOrderBook';
 import { useLastPrice } from '../hooks/useLastPrice';
 import {
@@ -12,8 +12,7 @@ import type { PrevSnapshot } from '../logic/orderBook.logic';
 import OrderBookView from './OrderBookView';
 
 export default function OrderBook() {
-  const [groupLevel, setGroupLevel] = useState(0);
-  const { asks, bids, status } = useOrderBook(groupLevel);
+  const { asks, bids, status } = useOrderBook();
   const lastPrice = useLastPrice();
   const committedRef = useRef<PrevSnapshot | null>(null);
 
@@ -22,11 +21,6 @@ export default function OrderBook() {
   useEffect(() => {
     committedRef.current = buildSnapshot(asks, bids);
   }, [asks, bids]);
-
-  const handleGroupChange = useCallback((level: number) => {
-    committedRef.current = null;
-    setGroupLevel(level);
-  }, []);
 
   const sumAsk = useMemo(() => sumTotals(asks), [asks]);
   const sumBid = useMemo(() => sumTotals(bids), [bids]);
@@ -62,8 +56,6 @@ export default function OrderBook() {
       lastPrice={lastPrice.price}
       lastPriceDirection={lastPrice.direction}
       status={status}
-      groupLevel={groupLevel}
-      onGroupChange={handleGroupChange}
     />
   );
 }

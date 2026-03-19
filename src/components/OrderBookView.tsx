@@ -1,6 +1,5 @@
 import type { QuoteLevel, PriceDirection } from '../types';
 import type { ConnectionStatus } from '../hooks/useOrderBook';
-import { GROUPING_OPTIONS } from '../constants';
 import QuoteRow from './QuoteRow';
 import LastPrice from './LastPrice';
 import { Spinner, StatusBadge } from '../styles/common.style';
@@ -21,8 +20,6 @@ interface OrderBookViewProps {
   lastPrice: number | null;
   lastPriceDirection: PriceDirection;
   status: ConnectionStatus;
-  groupLevel: number;
-  onGroupChange: (level: number) => void;
 }
 
 export default function OrderBookView({
@@ -31,8 +28,6 @@ export default function OrderBookView({
   lastPrice,
   lastPriceDirection,
   status,
-  groupLevel,
-  onGroupChange,
 }: OrderBookViewProps) {
   const isLoading = status === 'connecting' && askRows.length === 0;
   const isDisconnected = status === 'disconnected';
@@ -50,19 +45,6 @@ export default function OrderBookView({
           )}
         </S.HeaderRight>
       </S.Header>
-
-      <S.GroupingBar>
-        <S.GroupingLabel>Grouping:</S.GroupingLabel>
-        {GROUPING_OPTIONS.map((opt) => (
-          <S.GroupingButton
-            key={opt.level}
-            $active={groupLevel === opt.level}
-            onClick={() => onGroupChange(opt.level)}
-          >
-            {opt.label}
-          </S.GroupingButton>
-        ))}
-      </S.GroupingBar>
 
       {isLoading ? (
         <S.LoadingContainer>

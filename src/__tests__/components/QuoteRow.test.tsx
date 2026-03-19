@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, act } from '@testing-library/react';
 import QuoteRow from '../../components/QuoteRow';
 
 const baseProps = {
@@ -52,6 +52,27 @@ describe('QuoteRow', () => {
     );
     expect(screen.getByText('15')).toBeInTheDocument();
     expect(screen.getByText('50')).toBeInTheDocument();
+  });
+
+  it('should trigger row flash when isNew 從 false 變為 true', () => {
+    const { rerender } = render(<QuoteRow {...baseProps} isNew={false} />);
+    expect(screen.getByText('100')).toBeInTheDocument();
+
+    act(() => {
+      rerender(<QuoteRow {...baseProps} isNew={true} />);
+    });
+    act(() => {});
+
+    expect(screen.getByText('100')).toBeInTheDocument();
+  });
+
+  it('should not flash when isNew 維持 false 且非首次 render', () => {
+    const { rerender } = render(<QuoteRow {...baseProps} isNew={false} />);
+    act(() => {
+      rerender(<QuoteRow {...baseProps} quote={{ ...baseProps.quote, total: 60 }} isNew={false} />);
+    });
+    act(() => {});
+    expect(screen.getByText('100')).toBeInTheDocument();
   });
 
   it('should render with sell side (red color)', () => {

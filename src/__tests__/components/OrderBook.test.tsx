@@ -41,10 +41,9 @@ describe('OrderBook (Container Integration)', () => {
     cleanupMockWebSocket();
   });
 
-  it('should show Order Book header and grouping', () => {
+  it('should show Order Book header', () => {
     render(<OrderBook />);
     expect(screen.getAllByText('Order Book').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText('Grouping:').length).toBeGreaterThanOrEqual(1);
   });
 
   it('should show loading state initially', () => {

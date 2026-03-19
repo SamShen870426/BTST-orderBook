@@ -45,6 +45,11 @@ export class MockWebSocket {
     this.onmessage?.({ data: JSON.stringify(data) });
   }
 
+  /** 傳送原始字串，用於測試 JSON 解析錯誤等情境 */
+  simulateRawMessage(rawData: string): void {
+    this.onmessage?.({ data: rawData } as MessageEvent);
+  }
+
   simulateClose(): void {
     this.readyState = MockWebSocket.CLOSED;
     this.onclose?.();

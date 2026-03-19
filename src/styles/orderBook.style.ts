@@ -25,37 +25,6 @@ export const HeaderRight = styled.div`
   gap: 6px;
 `;
 
-export const GroupingBar = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 16px;
-  border-bottom: 1px solid rgba(134, 152, 170, 0.1);
-`;
-
-export const GroupingLabel = styled.span`
-  font-size: 11px;
-  color: ${COLORS.textHead};
-  margin-right: 4px;
-`;
-
-export const GroupingButton = styled.button<{ $active: boolean }>`
-  background: ${({ $active }) => ($active ? 'rgba(16, 186, 104, 0.15)' : 'none')};
-  border: 1px solid ${({ $active }) => ($active ? COLORS.buyPrice : 'rgba(134, 152, 170, 0.2)')};
-  color: ${({ $active }) => ($active ? COLORS.buyPrice : COLORS.textHead)};
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 3px;
-  cursor: pointer;
-  font-family: inherit;
-  transition: all 0.15s ease;
-
-  &:hover {
-    border-color: ${({ $active }) => ($active ? COLORS.buyPrice : 'rgba(134, 152, 170, 0.5)')};
-    color: ${({ $active }) => ($active ? COLORS.buyPrice : COLORS.textDefault)};
-  }
-`;
-
 export const TableHead = styled.div`
   display: flex;
   padding: 8px 16px;

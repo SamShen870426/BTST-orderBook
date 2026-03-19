@@ -18,7 +18,9 @@ export interface OrderBookState {
   status: ConnectionStatus;
 }
 
-export function useOrderBook(groupLevel: number) {
+const DEFAULT_GROUP_LEVEL = 0;
+
+export function useOrderBook() {
   const wsRef = useRef<WebSocket | null>(null);
   const bidsMap = useRef<PriceMap>(new Map());
   const asksMap = useRef<PriceMap>(new Map());
@@ -29,7 +31,7 @@ export function useOrderBook(groupLevel: number) {
   const batchTimerRef = useRef<ReturnType<typeof setInterval>>();
   const activityTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const mountedRef = useRef(true);
-  const topicRef = useRef(getOrderBookTopic(groupLevel));
+  const topicRef = useRef(getOrderBookTopic(DEFAULT_GROUP_LEVEL));
   const pendingDeltasRef = useRef<OrderBookData[]>([]);
   const awaitingSnapshotRef = useRef(false);
 
@@ -112,6 +114,9 @@ export function useOrderBook(groupLevel: number) {
           lastSeqNum.current = data.seqNum;
 
           if (awaitingSnapshotRef.current) {
+            // Resubscribe 空窗期暫存的 delta：只保留 prevSeqNum >= snapshot.seqNum 者
+            // 語義：此 delta 的「起點」在 snapshot 之後，才能接在 snapshot 後形成連續鏈
+            // 第一筆需 prevSeqNum === snapshot.seqNum (例: delta 102→103)，後續 prevSeqNum 遞增
             const buffered = pendingDeltasRef.current
               .filter((d) => d.prevSeqNum >= data.seqNum)
               .sort((a, b) => a.seqNum - b.seqNum);
@@ -178,24 +183,6 @@ export function useOrderBook(groupLevel: number) {
       ws.close();
     };
   }, [flush, setStatus, clearBookState, resubscribe]);
-
-  useEffect(() => {
-    const newTopic = getOrderBookTopic(groupLevel);
-    const oldTopic = topicRef.current;
-
-    if (newTopic === oldTopic) return;
-
-    const ws = wsRef.current;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ op: 'unsubscribe', args: [oldTopic] }));
-      clearBookState();
-      setOrderBook((prev) => ({ ...prev, asks: [], bids: [] }));
-      topicRef.current = newTopic;
-      ws.send(JSON.stringify({ op: 'subscribe', args: [newTopic] }));
-    } else {
-      topicRef.current = newTopic;
-    }
-  }, [groupLevel, clearBookState]);
 
   useEffect(() => {
     mountedRef.current = true;
