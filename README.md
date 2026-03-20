@@ -109,7 +109,6 @@ npm run test:coverage    # 覆蓋率報告
 | 文件 | 內容 |
 |------|------|
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | 架構圖、資料流、檔案樹、Snapshot buffer、診斷頁與心跳圖語意 |
-| [LEARNING_GUIDE.md](./LEARNING_GUIDE.md) | WebSocket / 委託簿概念入門（若審閱者不熟悉領域） |
 | [WS_APP_HEARTBEAT.md](./WS_APP_HEARTBEAT.md) | 應用層 ping/pong 與 RTT 圖說明 |
 | [TESTING.md](./TESTING.md) | 測試指令與金字塔 |
 
