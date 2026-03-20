@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { formatNumber } from '../../utils';
 
 describe('formatNumber', () => {
@@ -20,5 +20,14 @@ describe('formatNumber', () => {
 
   it('should handle numbers with many decimals', () => {
     expect(formatNumber(12345.678)).toBe('12,345.678');
+  });
+
+  it('當 split 回傳空陣列時 intPart 退回 0（防禦分支）', () => {
+    const splitSpy = vi.spyOn(String.prototype, 'split').mockImplementation(function (this: string, sep?: string) {
+      if (sep === '.') return [] as unknown as string[];
+      return String.prototype.split.call(this, sep);
+    });
+    expect(formatNumber(42)).toBe('0');
+    splitSpy.mockRestore();
   });
 });

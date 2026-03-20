@@ -81,6 +81,15 @@ describe('QuoteRow', () => {
     expect(screen.getByText('100')).toBeInTheDocument();
   });
 
+  it('isNew 為 false 且 side 變更時列閃爍 effect 應早退（memo 下需改依賴觸發）', () => {
+    const { rerender } = render(<QuoteRow {...baseProps} isNew={false} side="buy" />);
+    act(() => {
+      rerender(<QuoteRow {...baseProps} isNew={false} side="sell" />);
+    });
+    act(() => {});
+    expect(screen.getByText('100')).toBeInTheDocument();
+  });
+
   it('should render with sell side (red color)', () => {
     const { container } = render(<QuoteRow {...baseProps} side="sell" />);
     const sellPriceCell = container.querySelector('[style*="rgb(255, 91, 90)"]');

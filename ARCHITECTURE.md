@@ -30,7 +30,8 @@
 │           │                              │                    │
 │     ┌─────▼────────────────────────┐     │                    │
 │     │ 連線韌性                      │     │                    │
-│     │ • 活動偵測（10s 無訊息斷線） │     │                    │
+│     │ • 應用層 ping/pong（約 25s）   │     │                    │
+│     │ • 活動偵測（10s 全無訊息補強）│     │                    │
 │     │ • 指數退避重連（1s~30s）     │     │                    │
 │     │ • Tab 切換自動恢復           │     │                    │
 │     │ • Race condition 防護        │     │                    │
@@ -72,7 +73,7 @@
 │  │  └─ lastPrice.logic.ts                    │                 │
 │  └───────────────────────────────────────────┘                 │
 │                                                                │
-│  __tests__/ → 98 tests（L1 單元 + L2 Hooks + L3 Components）     │
+│  __tests__/ → 100 tests（L1 單元 + L2 Hooks + L3 Components）    │
 └───────────────────────────────────────────────────────────────┘
 ```
 
@@ -168,7 +169,8 @@
 
 | 機制 | 觸發條件 | 行為 |
 |------|----------|------|
-| **活動偵測** | 10s 內沒收到任何 WS 訊息 | 主動 `close()` 觸發重連（取代 ping/pong，因 OSS 端點不支援） |
+| **應用層 ping/pong** | 約每 25s（**訂單簿 + 成交**兩線） | 送 `ping`，伺服器回 `pong`（BTSE 文件；OSS 與 futures 已實測可用） |
+| **活動偵測（補強）** | 10s 內**完全**沒有任何 `onmessage`（含 pong） | 主動 `close()` 觸發重連；常態下會被 pong 重置，見 `WS_ACTIVITY_TIMEOUT_MS` |
 | **指數退避重連** | WS `onclose` 事件 | 1s → 2s → 4s → ... → max 30s，成功後歸零 |
 | **Tab 切換** | `visibilitychange` 事件 | 回到 tab 時，若 WS 已斷則立即重連（跳過退避等待） |
 | **Race condition 防護** | `connect()` 建新連線時 | 舊 WS 的 `onclose`/`onmessage` 透過 `wsRef.current !== ws` 檢查直接忽略 |
@@ -288,6 +290,7 @@ order-book/
 ├── package.json
 ├── ARCHITECTURE.md              # 本文件：系統架構與技術說明
 ├── LEARNING_GUIDE.md            # WebSocket／訂單簿入門（新手向）
+├── WS_APP_HEARTBEAT.md          # 應用層 ping/pong 與 Console 驗證方式
 ├── TESTING.md                   # 測試指南：如何使用、寫了哪些測試
 ├── tsconfig.json               # strict mode + noUncheckedIndexedAccess
 ├── vite.config.ts
@@ -312,7 +315,7 @@ order-book/
     │
     ├── hooks/                   ← 精簡：只負責 WS 連線 + state 管理
     │   ├── useOrderBook.ts      # WS + Map + batch + seqNum + 重連 + 活動偵測（import logic/）
-    │   └── useLastPrice.ts      # WS + 方向判定 + 重連（import logic/）
+    │   └── useLastPrice.ts      # WS + ping/pong + 活動偵測 + 方向判定 + 重連
     │
     ├── components/              ← Container / Presentation 分離
     │   ├── OrderBook.tsx        # Container：組合 hooks + logic → props 傳給 View（零 JSX）
@@ -320,10 +323,11 @@ order-book/
     │   ├── QuoteRow.tsx         # Presentation：memo + areEqual + 閃爍動畫
     │   └── LastPrice.tsx        # Presentation：memo + 方向顏色
     │
-    └── __tests__/               ← 分層測試（Vitest，98 tests）
+    └── __tests__/               ← 分層測試（Vitest，100 tests）
         ├── setup.ts
         ├── helpers/MockWebSocket.ts
-        ├── logic/                   # L1 單元：41 tests
+        ├── ws/                      # wsAppPingPong 等
+        ├── logic/                   # L1 單元：orderBook / quoteRow / lastPrice / utils
         │   ├── orderBook.logic.test.ts
         │   ├── quoteRow.logic.test.ts
         │   ├── lastPrice.logic.test.ts
@@ -406,7 +410,7 @@ order-book/
 | 深度條分母為什麼買賣取 max？ | 兩側同一比例尺，視覺上可比較買賣相對深度；公式見 2.5 |
 | 為什麼新報價比對用顯示的 8 筆而非整本 50 筆？ | 使用者關心的是「畫面上新出現的」，不是整本書的新增 |
 | 動畫為什麼用 CSS class 而非 inline style？ | @keyframes 可以做漸退效果，inline style + transition 太柔和不明顯 |
-| 為什麼 OSS 端點不用 ping/pong？ | OSS 端點不支援字串 ping/pong，改用活動偵測（有收到任何訊息=活著） |
+| 心跳與活動偵測？ | **主**：兩線皆用應用層 `ping`/`pong`（`wsAppPingPong.ts`）。**輔**：`WS_ACTIVITY_TIMEOUT_MS` 防僵死連線 |
 | WS 重連時怎麼防止 race condition？ | `onclose`/`onmessage` 檢查 `wsRef.current !== ws`，被取代的舊連線事件一律忽略 |
 | 為什麼用 Decimal.js？ | JS 浮點 `0.1+0.2≠0.3`，金融場景累加精度會逐層放大，交易所不能顯示不精確的數字 |
 | Grouping 切換時為什麼不重建 WS？ | 同一條 WS 連線可以切換 topic，省去重新握手的延遲和資源浪費 |

@@ -1,5 +1,8 @@
 export const WS_ORDERBOOK_URL = 'wss://ws.btse.com/ws/oss/futures';
 export const WS_TRADE_URL = 'wss://ws.btse.com/ws/futures';
+
+/** 兩條 WS 共用：長時間未收到任何 onmessage（含 pong／行情）則主動 close，觸發重連 */
+export const WS_ACTIVITY_TIMEOUT_MS = 10_000;
 export const ORDERBOOK_SYMBOL = 'BTCPFC';
 export const TRADE_TOPIC = 'tradeHistoryApi:BTCPFC';
 export const MAX_DISPLAY_ROWS = 8;

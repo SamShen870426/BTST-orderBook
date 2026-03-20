@@ -1,6 +1,11 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import type { OrderBookWsMessage, OrderBookData } from '../types';
-import { WS_ORDERBOOK_URL, getOrderBookTopic, MAX_DISPLAY_ROWS } from '../constants';
+import {
+  WS_ORDERBOOK_URL,
+  WS_ACTIVITY_TIMEOUT_MS,
+  getOrderBookTopic,
+  MAX_DISPLAY_ROWS,
+} from '../constants';
 import {
   applyLevels,
   applyDepthBarPercent,
@@ -9,11 +14,16 @@ import {
 } from '../logic/orderBook.logic';
 import type { PriceMap } from '../logic/orderBook.logic';
 import type { QuoteLevel } from '../types';
+import {
+  isWsAppPongMessage,
+  logWsAppPongReceived,
+  startWsAppPingInterval,
+} from '../ws/wsAppPingPong';
 
 const BATCH_INTERVAL = 50;
+const WS_PING_CHANNEL = 'orderbook OSS (/ws/oss/futures)';
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30000;
-const ACTIVITY_TIMEOUT_MS = 10000;
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
 
@@ -93,11 +103,13 @@ export function useOrderBook() {
     const ws = new WebSocket(WS_ORDERBOOK_URL);
     wsRef.current = ws;
 
+    let disposeAppPing: (() => void) | undefined;
+
     const resetActivityTimer = () => {
       clearTimeout(activityTimerRef.current);
       activityTimerRef.current = setTimeout(() => {
         ws.close();
-      }, ACTIVITY_TIMEOUT_MS);
+      }, WS_ACTIVITY_TIMEOUT_MS);
     };
 
     ws.onopen = () => {
@@ -105,11 +117,18 @@ export function useOrderBook() {
       setStatus('connected');
       ws.send(JSON.stringify({ op: 'subscribe', args: [topicRef.current] }));
       resetActivityTimer();
+      disposeAppPing?.();
+      disposeAppPing = startWsAppPingInterval(ws, WS_PING_CHANNEL);
     };
 
     ws.onmessage = (event: MessageEvent) => {
       if (wsRef.current !== ws) return;
       resetActivityTimer();
+
+      if (isWsAppPongMessage(event.data)) {
+        logWsAppPongReceived(WS_PING_CHANNEL);
+        return;
+      }
 
       try {
         const msg: OrderBookWsMessage = JSON.parse(event.data as string);
@@ -176,6 +195,8 @@ export function useOrderBook() {
     };
 
     ws.onclose = () => {
+      disposeAppPing?.();
+      disposeAppPing = undefined;
       clearTimeout(activityTimerRef.current);
       if (!mountedRef.current) return;
       if (wsRef.current !== ws) return;

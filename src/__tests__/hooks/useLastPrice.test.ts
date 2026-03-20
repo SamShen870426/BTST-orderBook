@@ -104,6 +104,20 @@ describe('useLastPrice', () => {
     });
   });
 
+  describe('應用層 pong', () => {
+    it('收到純文字 pong 時不更新價格且不拋錯', () => {
+      const { result, unmount } = renderHook(() => useLastPrice());
+      const ws = MockWebSocket.latest;
+
+      act(() => ws.simulateOpen());
+      act(() => ws.simulateRawMessage('pong'));
+
+      expect(result.current.price).toBeNull();
+      expect(result.current.direction).toBe('same');
+      unmount();
+    });
+  });
+
   describe('onmessage 邊界條件', () => {
     it('should ignore empty data array', () => {
       const { result, unmount } = renderHook(() => useLastPrice());
@@ -174,6 +188,24 @@ describe('useLastPrice', () => {
       });
 
       expect(MockWebSocket.instances.length).toBeGreaterThan(initialCount);
+      unmount();
+    });
+  });
+
+  describe('活動偵測逾時 (activity timeout)', () => {
+    it('應在 10 秒無訊息時關閉連線', () => {
+      vi.useFakeTimers();
+      const { unmount } = renderHook(() => useLastPrice());
+      const ws = MockWebSocket.latest;
+
+      act(() => ws.simulateOpen());
+
+      act(() => {
+        vi.advanceTimersByTime(10_000);
+      });
+
+      expect(ws.readyState).toBe(MockWebSocket.CLOSED);
+      vi.useRealTimers();
       unmount();
     });
   });

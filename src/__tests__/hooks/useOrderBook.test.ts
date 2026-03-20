@@ -74,6 +74,28 @@ describe('useOrderBook', () => {
     unmount();
   });
 
+  it('應用層 pong 不影響訂單簿狀態', () => {
+    const { result, unmount } = renderHook(() => useOrderBook());
+    const ws = MockWebSocket.latest;
+
+    act(() => ws.simulateOpen());
+    act(() => {
+      ws.simulateMessage(
+        makeSnapshot(
+          [['100', '10']],
+          [['101', '20']],
+          1
+        )
+      );
+    });
+    act(() => ws.simulateRawMessage('pong'));
+
+    expect(result.current.status).toBe('connected');
+    expect(result.current.bids.length).toBe(1);
+    expect(result.current.asks.length).toBe(1);
+    unmount();
+  });
+
   it('should have asks/bids after snapshot', () => {
     const { result, unmount } = renderHook(() => useOrderBook());
     const ws = MockWebSocket.latest;
