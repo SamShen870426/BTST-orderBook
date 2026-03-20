@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, cleanup, act } from '@testing-library/react';
 import QuoteRow from '../../components/QuoteRow';
 
@@ -95,5 +95,26 @@ describe('QuoteRow', () => {
     const sellPriceCell = container.querySelector('[style*="rgb(255, 91, 90)"]');
     expect(sellPriceCell).toBeInTheDocument();
     expect(sellPriceCell).toHaveTextContent('100');
+  });
+
+  it('isNew 由 false→true 且為 sell 時觸發賣方列閃爍 effect', () => {
+    const { rerender } = render(<QuoteRow {...baseProps} side="sell" isNew={false} />);
+    act(() => {
+      rerender(<QuoteRow {...baseProps} side="sell" isNew={true} />);
+    });
+    expect(screen.getByText('100')).toBeInTheDocument();
+  });
+
+  it('unmount 時清除 flash 計時器（配合假時鐘觸發 setTimeout 回呼路徑）', () => {
+    vi.useFakeTimers();
+    const { rerender, unmount } = render(<QuoteRow {...baseProps} isNew={false} />);
+    act(() => {
+      rerender(<QuoteRow {...baseProps} isNew={true} />);
+    });
+    act(() => {
+      vi.advanceTimersByTime(650);
+    });
+    unmount();
+    vi.useRealTimers();
   });
 });

@@ -118,45 +118,51 @@ describe('useOrderBook', () => {
     unmount();
   });
 
-  it('should update data after delta', async () => {
-    const { result, unmount } = renderHook(() => useOrderBook());
-    const ws = MockWebSocket.latest;
+  it('should update data after delta', () => {
+    vi.useFakeTimers();
+    try {
+      const { result, unmount } = renderHook(() => useOrderBook());
+      const ws = MockWebSocket.latest;
 
-    act(() => ws.simulateOpen());
-    act(() => {
-      ws.simulateMessage(makeSnapshot([['100', '10']], [['101', '20']], 1));
-    });
-    act(() => {
-      ws.simulateMessage(makeDelta([['100', '15']], [], 2, 1));
-    });
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 60));
-    });
+      act(() => ws.simulateOpen());
+      act(() => {
+        ws.simulateMessage(makeSnapshot([['100', '10']], [['101', '20']], 1));
+      });
+      act(() => {
+        ws.simulateMessage(makeDelta([['100', '15']], [], 2, 1));
+      });
+      act(() => vi.advanceTimersByTime(60));
 
-    expect(result.current.bids[0]!.size).toBe(15);
-    unmount();
+      expect(result.current.bids[0]!.size).toBe(15);
+      unmount();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
-  it('should remove price level when delta size is 0', async () => {
-    const { result, unmount } = renderHook(() => useOrderBook());
-    const ws = MockWebSocket.latest;
+  it('should remove price level when delta size is 0', () => {
+    vi.useFakeTimers();
+    try {
+      const { result, unmount } = renderHook(() => useOrderBook());
+      const ws = MockWebSocket.latest;
 
-    act(() => ws.simulateOpen());
-    act(() => {
-      ws.simulateMessage(
-        makeSnapshot([['100', '10'], ['99', '5']], [['101', '20']], 1)
-      );
-    });
-    act(() => {
-      ws.simulateMessage(makeDelta([['100', '0']], [], 2, 1));
-    });
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 60));
-    });
+      act(() => ws.simulateOpen());
+      act(() => {
+        ws.simulateMessage(
+          makeSnapshot([['100', '10'], ['99', '5']], [['101', '20']], 1)
+        );
+      });
+      act(() => {
+        ws.simulateMessage(makeDelta([['100', '0']], [], 2, 1));
+      });
+      act(() => vi.advanceTimersByTime(60));
 
-    expect(result.current.bids.length).toBe(1);
-    expect(result.current.bids[0]!.price).toBe(99);
-    unmount();
+      expect(result.current.bids.length).toBe(1);
+      expect(result.current.bids[0]!.price).toBe(99);
+      unmount();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('should resubscribe on seqNum mismatch', () => {
@@ -232,7 +238,7 @@ describe('useOrderBook', () => {
   });
 
   describe('Action 類型：snapshot (partial) vs delta (update)', () => {
-    it('snapshot 應清空 Map 並完全覆蓋（partial 行為）', async () => {
+    it('snapshot 應清空 Map 並完全覆蓋（partial 行為）', () => {
       const { result, unmount } = renderHook(() => useOrderBook());
       const ws = MockWebSocket.latest;
 
@@ -261,29 +267,32 @@ describe('useOrderBook', () => {
       unmount();
     });
 
-    it('delta 應增量更新，保留未變動價位', async () => {
-      const { result, unmount } = renderHook(() => useOrderBook());
-      const ws = MockWebSocket.latest;
+    it('delta 應增量更新，保留未變動價位', () => {
+      vi.useFakeTimers();
+      try {
+        const { result, unmount } = renderHook(() => useOrderBook());
+        const ws = MockWebSocket.latest;
 
-      act(() => ws.simulateOpen());
-      act(() => {
-        ws.simulateMessage(
-          makeSnapshot([['100', '10'], ['99', '5']], [['101', '20'], ['102', '30']], 1)
-        );
-      });
+        act(() => ws.simulateOpen());
+        act(() => {
+          ws.simulateMessage(
+            makeSnapshot([['100', '10'], ['99', '5']], [['101', '20'], ['102', '30']], 1)
+          );
+        });
 
-      act(() => {
-        ws.simulateMessage(makeDelta([['100', '25']], [], 2, 1));
-      });
-      await act(async () => {
-        await new Promise((r) => setTimeout(r, 60));
-      });
+        act(() => {
+          ws.simulateMessage(makeDelta([['100', '25']], [], 2, 1));
+        });
+        act(() => vi.advanceTimersByTime(60));
 
-      expect(result.current.bids[0]!.price).toBe(100);
-      expect(result.current.bids[0]!.size).toBe(25);
-      expect(result.current.bids[1]!.price).toBe(99);
-      expect(result.current.bids[1]!.size).toBe(5);
-      unmount();
+        expect(result.current.bids[0]!.price).toBe(100);
+        expect(result.current.bids[0]!.size).toBe(25);
+        expect(result.current.bids[1]!.price).toBe(99);
+        expect(result.current.bids[1]!.size).toBe(5);
+        unmount();
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 
@@ -327,35 +336,38 @@ describe('useOrderBook', () => {
   });
 
   describe('Snapshot Buffer 回放', () => {
-    it('應在收到新 snapshot 後正確回放空窗期暫存的 delta', async () => {
-      const { result, unmount } = renderHook(() => useOrderBook());
-      const ws = MockWebSocket.latest;
+    it('應在收到新 snapshot 後正確回放空窗期暫存的 delta', () => {
+      vi.useFakeTimers();
+      try {
+        const { result, unmount } = renderHook(() => useOrderBook());
+        const ws = MockWebSocket.latest;
 
-      act(() => ws.simulateOpen());
-      act(() => {
-        ws.simulateMessage(makeSnapshot([['100', '10']], [['101', '20']], 1));
-      });
+        act(() => ws.simulateOpen());
+        act(() => {
+          ws.simulateMessage(makeSnapshot([['100', '10']], [['101', '20']], 1));
+        });
 
-      act(() => {
-        ws.simulateMessage(makeDelta([], [], 5, 3));
-      });
-      act(() => {
-        ws.simulateMessage(makeDelta([['100', '25']], [], 3, 2));
-      });
-      act(() => {
-        ws.simulateMessage(makeDelta([['100', '99']], [], 4, 3));
-      });
-      act(() => {
-        ws.simulateMessage(makeSnapshot([['100', '10']], [['101', '20']], 2));
-      });
+        act(() => {
+          ws.simulateMessage(makeDelta([], [], 5, 3));
+        });
+        act(() => {
+          ws.simulateMessage(makeDelta([['100', '25']], [], 3, 2));
+        });
+        act(() => {
+          ws.simulateMessage(makeDelta([['100', '99']], [], 4, 3));
+        });
+        act(() => {
+          ws.simulateMessage(makeSnapshot([['100', '10']], [['101', '20']], 2));
+        });
 
-      await act(async () => {
-        await new Promise((r) => setTimeout(r, 60));
-      });
+        act(() => vi.advanceTimersByTime(60));
 
-      expect(result.current.bids[0]!.price).toBe(100);
-      expect(result.current.bids[0]!.size).toBe(99);
-      unmount();
+        expect(result.current.bids[0]!.price).toBe(100);
+        expect(result.current.bids[0]!.size).toBe(99);
+        unmount();
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 
@@ -380,31 +392,34 @@ describe('useOrderBook', () => {
   });
 
   describe('resubscribe 200ms 後 subscribe', () => {
-    it('應在 resubscribe 後 200ms 送出 subscribe', async () => {
-      const { unmount } = renderHook(() => useOrderBook());
-      const ws = MockWebSocket.latest;
+    it('應在 resubscribe 後 200ms 送出 subscribe', () => {
+      vi.useFakeTimers();
+      try {
+        const { unmount } = renderHook(() => useOrderBook());
+        const ws = MockWebSocket.latest;
 
-      act(() => ws.simulateOpen());
-      act(() => {
-        ws.simulateMessage(makeSnapshot([['100', '10']], [['101', '20']], 1));
-      });
-      ws.sentMessages = [];
-      act(() => {
-        ws.simulateMessage(makeDelta([], [], 5, 3));
-      });
+        act(() => ws.simulateOpen());
+        act(() => {
+          ws.simulateMessage(makeSnapshot([['100', '10']], [['101', '20']], 1));
+        });
+        ws.sentMessages = [];
+        act(() => {
+          ws.simulateMessage(makeDelta([], [], 5, 3));
+        });
 
-      await act(async () => {
-        await new Promise((r) => setTimeout(r, 250));
-      });
+        act(() => vi.advanceTimersByTime(250));
 
-      const sub = ws.sentMessages.find((m) => m.includes('subscribe'));
-      expect(sub).toBeDefined();
-      unmount();
+        const sub = ws.sentMessages.find((m) => m.includes('subscribe'));
+        expect(sub).toBeDefined();
+        unmount();
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 
   describe('visibilitychange 恢復連線', () => {
-    it('應在 tab 變為 visible 且 WS 非 OPEN 時重新 connect', async () => {
+    it('應在 tab 變為 visible 且 WS 非 OPEN 時重新 connect', () => {
       const { unmount } = renderHook(() => useOrderBook());
       const ws = MockWebSocket.latest;
 
@@ -421,11 +436,26 @@ describe('useOrderBook', () => {
       act(() => {
         document.dispatchEvent(new Event('visibilitychange'));
       });
-      await act(async () => {
-        await new Promise((r) => setTimeout(r, 100));
-      });
 
       expect(MockWebSocket.instances.length).toBeGreaterThan(countBefore);
+      unmount();
+    });
+
+    it('WS 已 OPEN 時 visibilitychange 不另開新連線', () => {
+      const { unmount } = renderHook(() => useOrderBook());
+      const ws = MockWebSocket.latest;
+
+      act(() => ws.simulateOpen());
+      act(() => ws.simulateMessage(makeSnapshot([['100', '10']], [['101', '20']], 1)));
+
+      const n = MockWebSocket.instances.length;
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        get: () => 'visible',
+      });
+      act(() => document.dispatchEvent(new Event('visibilitychange')));
+
+      expect(MockWebSocket.instances.length).toBe(n);
       unmount();
     });
   });

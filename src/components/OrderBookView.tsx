@@ -37,7 +37,6 @@ export default function OrderBookView({
       <S.Header>
         <S.HeaderLeft>
           <span>Order Book</span>
-          <S.HealthCheckLink to="/socket-health">WebSocket 連線診斷</S.HealthCheckLink>
         </S.HeaderLeft>
         <S.HeaderRight>
           {isDisconnected && (

@@ -1,6 +1,6 @@
 # Order Book — 測試指南
 
-> 本專案採用 **分層測試架構**，對應系統架構的 logic / hooks / components 三層，共 **125 個測試** 全數通過。覆蓋率請執行 `npm run test:coverage`；**ping/pong 與刻意不全測的效能權衡**見 **[TEST.md](./TEST.md)**。
+> 本專案採用 **分層測試架構**，對應 logic / hooks / components（及 runtime context）。目前共定義 **131** 個案例：**124** 個預設執行且通過，**7** 個以 `describe.skip` 略過（`/socket-health` 診斷相關，見 **[TEST.md](./TEST.md)** §5）。覆蓋率請執行 `npm run test:coverage`；**ping/pong 與刻意不全測的效能權衡**亦見 **[TEST.md](./TEST.md)**。
 
 ---
 
@@ -24,14 +24,16 @@ npm run test:watch
 - Node.js 20.10+（專案使用 Volta 鎖定版本）
 - 已執行 `npm install`
 
-### 預期輸出
+### 預期輸出（節錄）
 
 ```
- RUN  v4.1.0 C:/SBK/Frontend/order-book
+ RUN  v4.1.0 …/BTST-orderBook
 
- Test Files  11 passed (11)
-      Tests  125 passed (125)
+ Test Files  12 passed | 3 skipped (15)
+      Tests  124 passed | 7 skipped (131)
 ```
+
+（通過／略過的檔案數會隨 `describe.skip` 與新增測試檔而變；**131 = 124 + 7** 為目前案例總數。）
 
 ---
 
@@ -41,21 +43,22 @@ npm run test:watch
 
 ```
         ┌─────────────────────────────────────────────┐
-        │  L3: Component Tests（元件渲染）              │
-        │  OrderBookView / LastPrice / QuoteRow / OrderBook   │
-        │  共 23 個測試                                   │
+        │  L3: Component + Runtime Context             │
+        │  OrderBookView / LastPrice / QuoteRow /      │
+        │  OrderBook；OrderBookRuntimeContext（1）      │
+        │  共 26 個測試（執行中）                         │
         └─────────────────────────────────────────────┘
                               ▲
         ┌─────────────────────────────────────────────┐
         │  L2: Hook Tests（整合 + Mock WebSocket）     │
         │  useOrderBook / useLastPrice                 │
-        │  共 38 個測試                                 │
+        │  共 41 個測試（執行中）                        │
         └─────────────────────────────────────────────┘
                               ▲
         ┌─────────────────────────────────────────────┐
         │  L1: Unit Tests（純函數 + ws 工具）            │
         │  logic/*.logic.ts / utils.ts / wsAppPingPong │
-        │  共 57 個測試（含 ws 單元）                     │
+        │  共 57 個測試（執行中，含 ws 單元）              │
         └─────────────────────────────────────────────┘
 ```
 
@@ -63,9 +66,9 @@ npm run test:watch
 |------|------|------|
 | **L1** | 驗證純邏輯正確性，無 React、無網路 | Vitest |
 | **L2** | 驗證 hooks 與 WebSocket 互動、狀態流轉 | Vitest + MockWebSocket + renderHook |
-| **L3** | 驗證 UI 渲染與使用者互動 | Vitest + React Testing Library |
+| **L3** | 驗證 UI 渲染；`useOrderBookRuntime` 無 Provider 拋錯 | Vitest + React Testing Library + renderHook |
 
-**數量**：L1 共 57 個、L2 共 38 個、L3 共 23 個（合計 118）。
+**數量（僅統計預設會跑的案例）**：L1 **57**、L2 **41**（`useOrderBook` 24 + `useLastPrice` 17）、L3 **26**（元件 25 + `context` 1）→ **合計 124**。另見 **[TEST.md](./TEST.md)** 略過的 7 例。
 
 ---
 
@@ -73,27 +76,36 @@ npm run test:watch
 
 ```
 src/__tests__/
-├── setup.ts                    # 全域：引入 @testing-library/jest-dom
+├── setup.ts                    # 全域：引入 @testing-library/jest-dom、ResizeObserver stub
 ├── ws/
-│   └── wsAppPingPong.test.ts    # 15 tests：pong 辨識、日誌旗標、setInterval mock 觸發 ping 週期
+│   └── wsAppPingPong.test.ts   # 15 tests：pong 辨識、日誌旗標、setInterval mock 觸發 ping 週期
 ├── helpers/
-│   └── MockWebSocket.ts         # L2/L3 共用：模擬 WebSocket 行為
+│   └── MockWebSocket.ts        # L2 / L3 共用：模擬 WebSocket
 │
-├── logic/                       ← L1：純函數單元測試
-│   ├── orderBook.logic.test.ts  # 18 tests：applyLevels、buildQuoteLevels、getDepthBarDenominator、applyDepthBarPercent…
-│   ├── quoteRow.logic.test.ts   # 11 tests：areEqual, getRowFlashClass, getSizeFlashClass
-│   ├── lastPrice.logic.test.ts  # 7 tests：computePriceDirection, getDirectionConfig
-│   └── utils.test.ts            # 6 tests：formatNumber（含防禦分支）
+├── logic/                      ← L1
+│   ├── orderBook.logic.test.ts # 18 tests
+│   ├── quoteRow.logic.test.ts  # 11 tests
+│   ├── lastPrice.logic.test.ts # 7 tests
+│   └── utils.test.ts           # 6 tests
 │
-├── hooks/                       ← L2：Hooks 整合測試（Mock WebSocket）
-│   ├── useOrderBook.test.ts     # 23 tests：同上 + 應用層 pong 早退
-│   └── useLastPrice.test.ts     # 15 tests：價格更新、方向、pong 早退、邊界、活動逾時、重連、visibilitychange
+├── hooks/                      ← L2（Mock WebSocket）
+│   ├── useOrderBook.test.ts    # 24 tests：含 pong 早退、假時鐘批次／resubscribe、visibility、金融級場景
+│   └── useLastPrice.test.ts    # 17 tests：價格方向、pong、重連假時鐘、舊 socket 早退、visibility
 │
-└── components/                  ← L3：元件渲染測試
-    ├── OrderBookView.test.tsx   # 6 tests：loading、資料顯示、grouping、onGroupChange
-    ├── LastPrice.test.tsx       # 5 tests：null/價格、箭頭、格式化
-    ├── QuoteRow.test.tsx        # 9 tests：price/size/total、格式化、flash、side 變更、sell 顏色
-    └── OrderBook.test.tsx       # 3 tests：Container 整合（與 Mock WS 互動）
+├── context/
+│   └── OrderBookRuntimeContext.test.tsx  # 1 test：無 Provider 時 useOrderBookRuntime 拋錯
+│
+├── components/                 ← L3
+│   ├── OrderBookView.test.tsx  # 6 tests：loading、價量、連線 badge、LastPrice
+│   ├── LastPrice.test.tsx      # 5 tests
+│   ├── QuoteRow.test.tsx       # 11 tests：含 sell 閃爍、假時鐘 + unmount
+│   └── OrderBook.test.tsx      # 3 tests
+│
+├── pages/
+│   └── SocketHealthPage.test.tsx   # describe.skip：診斷頁（見 TEST.md）
+└── socketHealth/
+    ├── socketHealthLabels.test.ts       # describe.skip
+    └── buildLatencyChartData.test.ts    # describe.skip
 ```
 
 ---
@@ -130,8 +142,8 @@ it('should remove price levels when size is 0', () => {
 
 | 檔案 | 測試場景 | 測試數 |
 |------|----------|--------|
-| `useOrderBook.test.ts` | 連線、snapshot/delta、seqNum 不連續觸發 resubscribe、斷線；**金融級**：seqNum 跳號、Snapshot Buffer 回放、活動偵測逾時、visibility 恢復、onerror；數據裁剪、crossed orderbook、空數據防禦；**`simulateRawMessage('pong')` 早退** | 23 |
-| `useLastPrice.test.ts` | 初始 null、價格方向 up/down/same、**pong 早退**、邊界、onmessage 空數據、10s 活動偵測逾時、onclose 重連/已 unmount 不排程、onerror、visibilitychange | 15 |
+| `useOrderBook.test.ts` | 連線、snapshot/delta、seqNum 不連續 resubscribe、斷線；金融級場景；**`simulateRawMessage('pong')` 早退**；活動逾時；**假時鐘**推進批次 flush／resubscribe 200ms；**visibility**（含 WS 已 OPEN 不另連）；onerror；空數據防禦 | 24 |
+| `useLastPrice.test.ts` | 初始 null、價格方向、pong 早退、邊界、malformed JSON；10s 活動逾時；onclose **假時鐘重連**、unmount 不排程、**舊 socket 訊息早退**；onerror；**visibility**（含 WS 已 OPEN 不另連） | 17 |
 
 **MockWebSocket 使用方式**：
 
@@ -160,10 +172,11 @@ act(() => MockWebSocket.latest.simulateMessage({
 
 | 檔案 | 測試場景 | 測試數 |
 |------|----------|--------|
-| `OrderBookView.test.tsx` | connecting + 空資料 → Loading、有 asks/bids → 顯示 price/size/total、disconnected → Reconnecting badge、LastPrice 顯示 | 6 |
-| `LastPrice.test.tsx` | price=null → "--"、有價格 → 格式化、direction up → ↑、down → ↓、same → 無箭頭 | 5 |
-| `QuoteRow.test.tsx` | price/size/total、千分位格式化、bar 寬度、isNew flash（從 false→true、維持 false）、**isNew=false 且 side 變更**、size flash、sell 側紅色 | 9 |
+| `OrderBookView.test.tsx` | connecting 且無資料 → Loading；價量與 total；disconnected → Reconnecting；connecting 但有資料 → Connecting badge；LastPrice 與箭頭 | 6 |
+| `LastPrice.test.tsx` | price=null → "--"、有價格 → 格式化、direction up/down/same 與箭頭 | 5 |
+| `QuoteRow.test.tsx` | price/size/total、千分位、bar、isNew／side 變更與 flash、size flash、sell 紅色、**sell + isNew 閃爍**、**假時鐘 + unmount** | 11 |
 | `OrderBook.test.tsx` | Header、Loading 初始狀態、WS snapshot 後顯示資料 | 3 |
+| `OrderBookRuntimeContext.test.tsx` | 無 `OrderBookRuntimeProvider` 時 `useOrderBookRuntime` 拋錯（stderr 靜音避免 jsdom 洗版） | 1 |
 
 **範例**：驗證 LastPrice 依 direction 顯示箭頭
 
@@ -193,10 +206,11 @@ it('should show up arrow when direction is up', () => {
 - **L3 Component 測試**：新增 `OrderBookView`、`LastPrice`、`QuoteRow`、`OrderBook` 完整元件測試。
 - **MockWebSocket helper**：`helpers/MockWebSocket.ts` 提供 `simulateOpen`、`simulateMessage`、`simulateClose` 等 API，搭配 `installMockWebSocket()` / `cleanupMockWebSocket()` 管理全域 stub。
 
-### 5.3 測試穩定性優化
+### 5.3 測試穩定性與跑速（與現況一致）
 
-- **移除 `vi.useFakeTimers()`**：原本在 hook 測試的 `beforeEach` 使用 fake timers 會導致 `afterEach` 逾時（10s+）。改為使用真實 `setTimeout`，需等待 batch 的測試改用 `act` + `await new Promise(r => setTimeout(r, 60))`。
-- **確保 `cleanup()`**：QuoteRow 等 component 測試在 `afterEach` 呼叫 `cleanup()`，避免 DOM 殘留造成 `getByText` 找到多個元素。
+- **不在全域 `beforeEach` 開假時鐘**：過去在 hook 測試全域 `useFakeTimers()` 曾導致 teardown 逾時；**維持不用**。
+- **區部假時鐘**：`useOrderBook`／`useLastPrice` 中需等待 **批次 flush（50ms）**、**重連 delay（1s）**、**resubscribe 200ms** 的案例，改在單一測試內 **`try { … vi.useFakeTimers() … } finally { vi.useRealTimers() }`**，縮短 CI 時間且避免汙染其他案例。
+- **`cleanup()`**：QuoteRow 等 component 測試在 `afterEach` 呼叫 `cleanup()`，避免 DOM 殘留。
 
 ### 5.4 專案配置
 
@@ -227,7 +241,8 @@ it('should show up arrow when direction is up', () => {
 1. **純函數** → 放 `logic/*.test.ts`，直接 import 測試。
 2. **Hooks** → 放 `hooks/*.test.ts`，使用 `installMockWebSocket()`，`renderHook` + `act` 模擬事件。
 3. **元件** → 放 `components/*.test.tsx`，用 `render`、`screen`、`fireEvent`，驗證文字、按鈕點擊、props 變化。
-4. **避免 `useFakeTimers` 與 `renderHook` 混用**：易造成 afterEach timeout；若需等待，改用真實 `setTimeout` + `act`。
+4. **Runtime context 守門** → 放 `context/*.test.tsx`，`renderHook` 驗證無 Provider 時是否拋錯（可參考現有 stderr 靜音寫法）。
+5. **假時鐘**：與 `renderHook` 並用時，**僅在單一 `it` 內**開關，並以 **`try/finally` 還原 `useRealTimers()`**；勿在共用 `beforeEach` 全域啟用。若單例不需計時器，仍可用真實 `setTimeout` + `act`。
 
 ---
 
@@ -239,12 +254,13 @@ it('should show up arrow when direction is up', () => {
 
 ### 8.1 未覆蓋分支說明（可接受不測試）
 
-以下分支因實務上難觸發或成本過高，保留為防禦性程式碼，不強求 100%：
+以下類型分支因實務上難觸發或成本過高，保留為防禦性程式碼，不強求 100%；**行號僅供對照，以原始碼為準**：
 
-| 檔案 | 行數 | 說明 |
-|------|------|------|
-| `useLastPrice.ts` | 21-23 | `connect` 內 `mountedRef.current === false` 時 early return。unmount 時已 clearTimeout(retryTimer)，retry 不會再呼叫 connect，此分支在正常流程下不會進入。 |
-| `useLastPrice.ts` | 40-42 | `trade === undefined`：JSON 不支援 `undefined`，`msg.data[0]` 僅可能為 `null` 或有效值，此條件主要防範 sparse array 等罕見情況。 |
-| `useLastPrice.ts` | 52-54, 55-77 | `onclose`/`onerror`/`handleVisibility` 的 `mountedRef`、`wsRef !== ws` 等 guard：多為競態防護，需精確模擬 unmount 時序，測試成本高。 |
+| 檔案 | 說明 |
+|------|------|
+| `useLastPrice.ts` | `connect` 開頭 `!mountedRef.current` early return；`trade === undefined`（JSON 難表達）；`onclose` 其餘 `wsRef`／`mountedRef` 細部組合等。 |
+| `useOrderBook.ts` | snapshot 緩衝迴圈極端 `prevSeqNum` 組合、`resubscribe` 內 `setTimeout(200)` 當下 socket 已非 `OPEN` 等。 |
 
-`utils.ts` 之 `parts[0] ?? '0'` 防禦分支已以 `String.prototype.split` mock 覆蓋；`wsAppPingPong.ts` 之 ping/pong 日誌與週期邏輯見 `wsAppPingPong.test.ts`。
+已補測：**`wsRef !== ws` 舊 socket 訊息早退**、**visibility 且 WS 已 OPEN 不另連**（見 hooks 測試）。更完整的競態清單與取捨見 **[TEST.md](./TEST.md) §3**。
+
+`utils.ts` 防禦分支已以 `split` mock 覆蓋；`wsAppPingPong.ts` 見 `wsAppPingPong.test.ts`。

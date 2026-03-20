@@ -156,7 +156,8 @@ describe('useLastPrice', () => {
   });
 
   describe('onclose 與重連', () => {
-    it('onclose 時若已 unmount 則不排程重連', async () => {
+    it('onclose 時若已 unmount 則不排程重連', () => {
+      vi.useFakeTimers();
       const { unmount } = renderHook(() => useLastPrice());
       const ws = MockWebSocket.latest;
 
@@ -166,13 +167,14 @@ describe('useLastPrice', () => {
       const countBefore = MockWebSocket.instances.length;
       unmount();
 
-      await act(async () => {
-        await new Promise((r) => setTimeout(r, 1200));
-      });
+      act(() => ws.simulateClose());
+      act(() => vi.advanceTimersByTime(5000));
       expect(MockWebSocket.instances.length).toBe(countBefore);
+      vi.useRealTimers();
     });
 
-    it('should schedule reconnect on WS close', async () => {
+    it('should schedule reconnect on WS close', () => {
+      vi.useFakeTimers();
       const { result, unmount } = renderHook(() => useLastPrice());
       const ws = MockWebSocket.latest;
 
@@ -182,13 +184,32 @@ describe('useLastPrice', () => {
 
       const initialCount = MockWebSocket.instances.length;
       act(() => ws.simulateClose());
-
-      await act(async () => {
-        await new Promise((r) => setTimeout(r, 1100));
-      });
+      act(() => vi.advanceTimersByTime(1000));
 
       expect(MockWebSocket.instances.length).toBeGreaterThan(initialCount);
       unmount();
+      vi.useRealTimers();
+    });
+
+    it('重連後舊 socket 的 onmessage 不應改寫 state（wsRef !== ws 早退）', () => {
+      vi.useFakeTimers();
+      const { result, unmount } = renderHook(() => useLastPrice());
+      const ws1 = MockWebSocket.latest;
+
+      act(() => ws1.simulateOpen());
+      act(() => ws1.simulateMessage(makeTrade(75000)));
+      act(() => ws1.simulateClose());
+      act(() => vi.advanceTimersByTime(1000));
+
+      const ws2 = MockWebSocket.latest;
+      expect(ws2).not.toBe(ws1);
+      act(() => ws2.simulateOpen());
+
+      act(() => ws1.simulateMessage(makeTrade(99999)));
+      expect(result.current.price).toBe(75000);
+
+      unmount();
+      vi.useRealTimers();
     });
   });
 
@@ -226,7 +247,7 @@ describe('useLastPrice', () => {
   });
 
   describe('visibilitychange 恢復連線', () => {
-    it('should reconnect when tab becomes visible and WS is not open', async () => {
+    it('should reconnect when tab becomes visible and WS is not open', () => {
       const { unmount } = renderHook(() => useLastPrice());
 
       Object.defineProperty(document, 'visibilityState', {
@@ -242,7 +263,25 @@ describe('useLastPrice', () => {
       unmount();
     });
 
-    it('should reconnect when returning to tab after WS closed', async () => {
+    it('WS 已 OPEN 時 visibilitychange 不另開新連線', () => {
+      const { unmount } = renderHook(() => useLastPrice());
+      const ws = MockWebSocket.latest;
+
+      act(() => ws.simulateOpen());
+      act(() => ws.simulateMessage(makeTrade(75000)));
+
+      const n = MockWebSocket.instances.length;
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        get: () => 'visible',
+      });
+      act(() => document.dispatchEvent(new Event('visibilitychange')));
+
+      expect(MockWebSocket.instances.length).toBe(n);
+      unmount();
+    });
+
+    it('should reconnect when returning to tab after WS closed', () => {
       const { unmount } = renderHook(() => useLastPrice());
       const ws = MockWebSocket.latest;
 
@@ -258,10 +297,6 @@ describe('useLastPrice', () => {
       const countBefore = MockWebSocket.instances.length;
       act(() => {
         document.dispatchEvent(new Event('visibilitychange'));
-      });
-
-      await act(async () => {
-        await new Promise((r) => setTimeout(r, 100));
       });
 
       expect(MockWebSocket.instances.length).toBeGreaterThanOrEqual(countBefore);

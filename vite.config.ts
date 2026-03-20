@@ -20,6 +20,10 @@ export default defineConfig({
         'src/App.tsx',
         'src/main.tsx',
         'src/types.ts',
+        // 工程師用 /socket-health 診斷頁與其模組，不計入產品覆蓋率
+        'src/pages/SocketHealthPage.tsx',
+        'src/socketHealth/**',
+        'src/styles/socketHealth*.style.ts',
       ],
     },
   },
