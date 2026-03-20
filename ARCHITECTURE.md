@@ -3,7 +3,6 @@
 > **技術棧**：React 18 + TypeScript + Vite + React Router + Styled-Components + Recharts + Decimal.js + Vitest  
 > **資料來源**：BTSE Futures WebSocket API  
 > **市場代號**：BTCPFC（BTC 永續合約）  
-> **新手入門**：若不熟悉 WebSocket 與金融交易，請先閱讀 [LEARNING_GUIDE.md](./LEARNING_GUIDE.md)
 
 ---
 
@@ -436,7 +435,7 @@ order-book/
 
 ---
 
-## 6. 面試亮點速查
+## 6. 技術決策與權衡
 
 | 問題 | 回答要點 |
 |------|----------|
