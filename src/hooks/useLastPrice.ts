@@ -7,6 +7,14 @@ import {
   logWsAppPongReceived,
   startWsAppPingInterval,
 } from '../ws/wsAppPingPong';
+import {
+  socketHealthMarkClosed,
+  socketHealthMarkConnecting,
+  socketHealthMarkInbound,
+  socketHealthMarkOpen,
+  socketHealthMarkPingSent,
+  socketHealthMarkPong,
+} from '../socketHealth/socketHealthStore';
 
 const RECONNECT_BASE_MS = 1000;
 const WS_PING_CHANNEL = 'futures trade (/ws/futures)';
@@ -32,6 +40,7 @@ export function useLastPrice(): LastPriceState {
     wsRef.current?.close();
     const ws = new WebSocket(WS_TRADE_URL);
     wsRef.current = ws;
+    socketHealthMarkConnecting('trade');
 
     let disposeAppPing: (() => void) | undefined;
 
@@ -44,17 +53,22 @@ export function useLastPrice(): LastPriceState {
 
     ws.onopen = () => {
       retryCount.current = 0;
+      socketHealthMarkOpen('trade', TRADE_TOPIC);
       ws.send(JSON.stringify({ op: 'subscribe', args: [TRADE_TOPIC] }));
       resetActivityTimer();
       disposeAppPing?.();
-      disposeAppPing = startWsAppPingInterval(ws, WS_PING_CHANNEL);
+      disposeAppPing = startWsAppPingInterval(ws, WS_PING_CHANNEL, {
+        onPingSent: () => socketHealthMarkPingSent('trade'),
+      });
     };
 
     ws.onmessage = (event: MessageEvent) => {
       if (wsRef.current !== ws) return;
       resetActivityTimer();
+      socketHealthMarkInbound('trade');
 
       if (isWsAppPongMessage(event.data)) {
+        socketHealthMarkPong('trade');
         logWsAppPongReceived(WS_PING_CHANNEL);
         return;
       }
@@ -79,6 +93,9 @@ export function useLastPrice(): LastPriceState {
       disposeAppPing?.();
       disposeAppPing = undefined;
       clearTimeout(activityTimerRef.current);
+      if (wsRef.current === ws || wsRef.current === null) {
+        socketHealthMarkClosed('trade');
+      }
       if (!mountedRef.current) return;
       if (wsRef.current !== ws) return;
 

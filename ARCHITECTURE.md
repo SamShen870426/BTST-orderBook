@@ -1,6 +1,6 @@
 # Order Book — 系統架構與技術文件
 
-> **技術棧**：React 18 + TypeScript + Vite + Styled-Components + Decimal.js + Vitest  
+> **技術棧**：React 18 + TypeScript + Vite + React Router + Styled-Components + Recharts + Decimal.js + Vitest  
 > **資料來源**：BTSE Futures WebSocket API  
 > **市場代號**：BTCPFC（BTC 永續合約）  
 > **新手入門**：若不熟悉 WebSocket 與金融交易，請先閱讀 [LEARNING_GUIDE.md](./LEARNING_GUIDE.md)
@@ -224,6 +224,27 @@
     → 本地 seqNum = 104，資料完整 ✓
 ```
 
+### 2.12 WebSocket 診斷頁（`/socket-health`）與 RTT 心跳圖
+
+**目的**：在行情異常時快速判斷是否為 **WebSocket／網路層** 問題，無需另開第二組連線。
+
+**路由與狀態**：使用 `react-router-dom`；`OrderBookRuntimeContext` 的 **Provider 掛在 `Routes` 外**（見 `main.tsx`），使從 `/` 切到 `/socket-health` 時 **同一組 WS 不斷線**。診斷頁本體以 **`React.lazy` + `Suspense`** 載入，將 **recharts** 拆成獨立 chunk，減輕首頁 bundle。
+
+**資料管線（高效）**：
+- `socketHealthStore.ts`：模組級欄位；`useOrderBook` / `useLastPrice` 在 `onopen`／`onmessage`／`onclose`／`onPingSent` 僅做 **O(1) 賦值**（含 `inboundSeq`、pong **RTT** 樣本、throughput 時間戳等），**不**驅動訂單簿 re-render。
+- 診斷頁以 **約 1s** `setInterval` 讀 `socketHealthGetSnapshot()` 更新 React；`MessagePulse` 另以 **200ms** 輪詢 `inboundSeq` 觸發閃爍（避免 60fps rAF）。
+
+**心跳圖在畫什麼（recharts `AreaChart`）**：
+- 橫軸：**最近 60 秒**，每秒一格（左舊右新）。
+- 縱軸標題為 **「RTT 相對強度」**：數值為 **0～100%**，來自 `buildHeartbeatChartSeries`——在視窗內取 **最大 RTT 當 100%**，其餘有樣本的秒依比例縮放；**絕對毫秒**見圖表右下 **「峰值 xx ms」**。
+- **貼底平線（看起來「低」）**：該 **1 秒內沒有** 成功記錄到 **pong→RTT**（多數秒數會是這樣，屬正常）。
+- **尖峰（看起來「高」）**：該秒有 **pong**，代表完成一次應用層 **ping→pong** 往返；**尖峰較高**表示在這 **60 秒視窗裡**，那次往返 **延遲（RTT）較長**（網路較慢、排程或瞬間抖動）。**尖峰較低**表示同視窗內 **RTT 較短** 的一次成功回應——**兩者都是「有心跳」**，不是「低＝沒跳、高＝有跳」。
+- **樣本從哪來**：收到純文字 `pong` 時 `socketHealthMarkPong` 以 `Date.now() - lastPingSentAt` 寫入 `latencyHistory`；連線後 **`queueMicrotask` 會立刻送第一次 ping**，之後約每 25s 一次（`WS_APP_PING_INTERVAL_MS`）。
+
+**其他指標**：每秒 **Throughput**（`onmessage` 次數／秒）、**JS Heap**（Chromium `performance.memory`，非所有瀏覽器可用）。
+
+**UI 注意**：空狀態說明置於 **`ChartEmptyInner` 單一區塊**（段落用 `<p>`），避免父層 `display:flex` 對多個文字子節點排版造成 **重新整理後直排／重疊破版**。詳見 `WS_APP_HEARTBEAT.md`。
+
 ---
 
 ## 3. 資料流完整路徑
@@ -295,8 +316,8 @@ order-book/
 ├── tsconfig.json               # strict mode + noUncheckedIndexedAccess
 ├── vite.config.ts
 └── src/
-    ├── main.tsx                 # StrictMode 入口
-    ├── App.tsx
+    ├── main.tsx                 # BrowserRouter + OrderBookRuntimeProvider + StrictMode
+    ├── App.tsx                  # Routes：`/` OrderBook、`/socket-health` 診斷頁
     ├── index.css                # 精簡：只保留 CSS reset + body 基礎樣式
     ├── types.ts                 # OrderBookWsMessage / TradeData / QuoteLevel
     ├── constants.ts             # WS URL / Topic / COLORS / GROUPING_OPTIONS
@@ -304,7 +325,9 @@ order-book/
     │
     ├── styles/                  ← Styled-Components（對應 megatron-slicing 角色）
     │   ├── common.style.ts      # Spinner, StatusBadge
-    │   ├── orderBook.style.ts   # Wrapper, Header, TableHead, QuoteSection, Loading...
+    │   ├── orderBook.style.ts   # Wrapper, Header, HealthCheckLink, TableHead, QuoteSection, Loading...
+    │   ├── socketHealth.style.ts
+    │   ├── socketHealthPulse.style.ts
     │   ├── quoteRow.style.ts    # Row, Bar(.attrs), PriceCell, SizeCell, TotalCellWrapper, TotalCell + keyframes
     │   └── lastPrice.style.ts   # Container(.attrs), PriceValue(.attrs), Arrow
     │
@@ -313,9 +336,23 @@ order-book/
     │   ├── quoteRow.logic.ts    # areEqual, getRowFlashClass, getSizeFlashClass
     │   └── lastPrice.logic.ts   # computePriceDirection, getDirectionConfig
     │
+    ├── context/
+    │   └── OrderBookRuntimeContext.tsx  # Routes 外掛載 hooks，切換頁面不斷 WS
+    │
+    ├── socketHealth/            ← 診斷用：模組級 store（O(1) 寫入）
+    │   ├── socketHealthStore.ts # 連線狀態、inboundSeq、latencyHistory、throughput 環
+    │   ├── socketHealthLabels.ts
+    │   ├── buildLatencyChartData.ts # 60 秒 bucket → RTT 相對強度（供圖表）
+    │   ├── LatencyAreaChart.tsx
+    │   ├── MessagePulse.tsx
+    │   └── readJsHeap.ts
+    │
+    ├── pages/
+    │   └── SocketHealthPage.tsx # `/socket-health`：每秒讀 snapshot 刷新 UI
+    │
     ├── hooks/                   ← 精簡：只負責 WS 連線 + state 管理
-    │   ├── useOrderBook.ts      # WS + Map + batch + seqNum + 重連 + 活動偵測（import logic/）
-    │   └── useLastPrice.ts      # WS + ping/pong + 活動偵測 + 方向判定 + 重連
+    │   ├── useOrderBook.ts      # WS + Map + batch + seqNum + 重連 + 活動偵測 + 寫入 socketHealthStore
+    │   └── useLastPrice.ts      # WS + ping/pong + 活動偵測 + 方向判定 + 重連 + 寫入 socketHealthStore
     │
     ├── components/              ← Container / Presentation 分離
     │   ├── OrderBook.tsx        # Container：組合 hooks + logic → props 傳給 View（零 JSX）

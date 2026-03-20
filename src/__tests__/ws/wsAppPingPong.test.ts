@@ -141,19 +141,23 @@ describe('startWsAppPingInterval', () => {
     intervalHandler?.();
   }
 
-  it('週期邏輯：OPEN 時 tick 會送出 ping', () => {
+  it('週期邏輯：OPEN 時 queueMicrotask 先送一次 ping，再手動 tick 再送', async () => {
     const ws = new MockWebSocket('ws://test');
     ws.simulateOpen();
-    const dispose = startWsAppPingInterval(ws, 'ch');
-    expect(ws.sentMessages).toHaveLength(0);
+    const onPingSent = vi.fn();
+    const dispose = startWsAppPingInterval(ws as unknown as WebSocket, 'ch', { onPingSent });
+    await Promise.resolve();
+    expect(ws.sentMessages.filter((m) => m === WS_APP_PING_TEXT)).toHaveLength(1);
+    expect(onPingSent).toHaveBeenCalledTimes(1);
     firePingTick();
-    expect(ws.sentMessages).toContain(WS_APP_PING_TEXT);
+    expect(ws.sentMessages.filter((m) => m === WS_APP_PING_TEXT)).toHaveLength(2);
+    expect(onPingSent).toHaveBeenCalledTimes(2);
     dispose();
   });
 
   it('連線非 OPEN 時 tick 不送 ping', () => {
     const ws = new MockWebSocket('ws://test');
-    const dispose = startWsAppPingInterval(ws, 'ch');
+    const dispose = startWsAppPingInterval(ws as unknown as WebSocket, 'ch');
     firePingTick();
     expect(ws.sentMessages).toHaveLength(0);
     dispose();
@@ -165,15 +169,16 @@ describe('startWsAppPingInterval', () => {
     vi.spyOn(ws, 'send').mockImplementation(() => {
       throw new Error('send failed');
     });
-    const dispose = startWsAppPingInterval(ws, 'ch');
+    const dispose = startWsAppPingInterval(ws as unknown as WebSocket, 'ch');
     expect(() => firePingTick()).not.toThrow();
     dispose();
   });
 
-  it('dispose 後 clearInterval，再觸發 tick 不應再送', () => {
+  it('dispose 後 clearInterval，再觸發 tick 不應再送', async () => {
     const ws = new MockWebSocket('ws://test');
     ws.simulateOpen();
-    const dispose = startWsAppPingInterval(ws, 'ch');
+    const dispose = startWsAppPingInterval(ws as unknown as WebSocket, 'ch');
+    await Promise.resolve();
     firePingTick();
     const n = ws.sentMessages.filter((m) => m === WS_APP_PING_TEXT).length;
     dispose();
@@ -185,7 +190,7 @@ describe('startWsAppPingInterval', () => {
   it('使用官方 ping 間隔常數註冊 setInterval', () => {
     const ws = new MockWebSocket('ws://test');
     ws.simulateOpen();
-    const dispose = startWsAppPingInterval(ws, 'ch');
+    const dispose = startWsAppPingInterval(ws as unknown as WebSocket, 'ch');
     expect(intervalSpy).toHaveBeenCalledWith(expect.any(Function), WS_APP_PING_INTERVAL_MS);
     dispose();
   });

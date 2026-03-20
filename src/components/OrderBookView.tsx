@@ -35,7 +35,10 @@ export default function OrderBookView({
   return (
     <S.Wrapper>
       <S.Header>
-        <span>Order Book</span>
+        <S.HeaderLeft>
+          <span>Order Book</span>
+          <S.HealthCheckLink to="/socket-health">WebSocket 連線診斷</S.HealthCheckLink>
+        </S.HeaderLeft>
         <S.HeaderRight>
           {isDisconnected && (
             <StatusBadge $variant="disconnected">Reconnecting...</StatusBadge>

@@ -1,6 +1,6 @@
 # Order Book — 測試指南
 
-> 本專案採用 **分層測試架構**，對應系統架構的 logic / hooks / components 三層，共 **98 個測試** 全數通過。**Lines 覆蓋率 100%**（執行 `npm run test -- --coverage` 可產生報告）。
+> 本專案採用 **分層測試架構**，對應系統架構的 logic / hooks / components 三層，共 **125 個測試** 全數通過。覆蓋率請執行 `npm run test:coverage`；**ping/pong 與刻意不全測的效能權衡**見 **[TEST.md](./TEST.md)**。
 
 ---
 
@@ -11,6 +11,9 @@
 ```bash
 # 執行全部測試（單次）
 npm test
+
+# 含 v8 覆蓋率（文字 + html）
+npm run test:coverage
 
 # 監聽模式：檔案變動時自動重跑
 npm run test:watch
@@ -26,8 +29,8 @@ npm run test:watch
 ```
  RUN  v4.1.0 C:/SBK/Frontend/order-book
 
- Test Files  10 passed (10)
-      Tests  98 passed (98)
+ Test Files  11 passed (11)
+      Tests  125 passed (125)
 ```
 
 ---
@@ -40,19 +43,19 @@ npm run test:watch
         ┌─────────────────────────────────────────────┐
         │  L3: Component Tests（元件渲染）              │
         │  OrderBookView / LastPrice / QuoteRow / OrderBook   │
-        │  共 22 個測試                                   │
+        │  共 23 個測試                                   │
         └─────────────────────────────────────────────┘
                               ▲
         ┌─────────────────────────────────────────────┐
         │  L2: Hook Tests（整合 + Mock WebSocket）     │
         │  useOrderBook / useLastPrice                 │
-        │  共 35 個測試                                 │
+        │  共 38 個測試                                 │
         └─────────────────────────────────────────────┘
                               ▲
         ┌─────────────────────────────────────────────┐
-        │  L1: Unit Tests（純函數）                    │
-        │  logic/*.logic.ts / utils.ts                 │
-        │  共 41 個測試                                 │
+        │  L1: Unit Tests（純函數 + ws 工具）            │
+        │  logic/*.logic.ts / utils.ts / wsAppPingPong │
+        │  共 57 個測試（含 ws 單元）                     │
         └─────────────────────────────────────────────┘
 ```
 
@@ -62,7 +65,7 @@ npm run test:watch
 | **L2** | 驗證 hooks 與 WebSocket 互動、狀態流轉 | Vitest + MockWebSocket + renderHook |
 | **L3** | 驗證 UI 渲染與使用者互動 | Vitest + React Testing Library |
 
-**數量**：L1 共 41 個、L2 共 35 個、L3 共 22 個（合計 98）。
+**數量**：L1 共 57 個、L2 共 38 個、L3 共 23 個（合計 118）。
 
 ---
 
@@ -71,23 +74,25 @@ npm run test:watch
 ```
 src/__tests__/
 ├── setup.ts                    # 全域：引入 @testing-library/jest-dom
+├── ws/
+│   └── wsAppPingPong.test.ts    # 15 tests：pong 辨識、日誌旗標、setInterval mock 觸發 ping 週期
 ├── helpers/
 │   └── MockWebSocket.ts         # L2/L3 共用：模擬 WebSocket 行為
 │
 ├── logic/                       ← L1：純函數單元測試
-│   ├── orderBook.logic.test.ts  # 18 tests：applyLevels, buildQuoteLevels, getDepthBarDenominator, applyDepthBarPercent, computeBarPercent...
+│   ├── orderBook.logic.test.ts  # 18 tests：applyLevels、buildQuoteLevels、getDepthBarDenominator、applyDepthBarPercent…
 │   ├── quoteRow.logic.test.ts   # 11 tests：areEqual, getRowFlashClass, getSizeFlashClass
 │   ├── lastPrice.logic.test.ts  # 7 tests：computePriceDirection, getDirectionConfig
-│   └── utils.test.ts            # 5 tests：formatNumber
+│   └── utils.test.ts            # 6 tests：formatNumber（含防禦分支）
 │
 ├── hooks/                       ← L2：Hooks 整合測試（Mock WebSocket）
-│   ├── useOrderBook.test.ts     # 22 tests：連線、seqNum、重連、金融級場景（seqNum 連續性、Snapshot Buffer、snapshot/delta、數據裁剪、活動偵測、visibility、onerror 等）
-│   └── useLastPrice.test.ts     # 12 tests：價格更新、方向判定、邊界、重連、visibilitychange
+│   ├── useOrderBook.test.ts     # 23 tests：同上 + 應用層 pong 早退
+│   └── useLastPrice.test.ts     # 15 tests：價格更新、方向、pong 早退、邊界、活動逾時、重連、visibilitychange
 │
 └── components/                  ← L3：元件渲染測試
-    ├── OrderBookView.test.tsx   # 8 tests：loading、資料顯示、grouping、onGroupChange
+    ├── OrderBookView.test.tsx   # 6 tests：loading、資料顯示、grouping、onGroupChange
     ├── LastPrice.test.tsx       # 5 tests：null/價格、箭頭、格式化
-    ├── QuoteRow.test.tsx        # 6 tests：price/size/total、格式化、flash、sell 顏色
+    ├── QuoteRow.test.tsx        # 9 tests：price/size/total、格式化、flash、side 變更、sell 顏色
     └── OrderBook.test.tsx       # 3 tests：Container 整合（與 Mock WS 互動）
 ```
 
@@ -104,7 +109,8 @@ src/__tests__/
 | `orderBook.logic.test.ts` | `applyLevels`、`buildQuoteLevels`、`getDepthBarDenominator`、`applyDepthBarPercent`、`computeBarPercent`、`buildSnapshot`、`computeIsNew`、`getPrevSize`、`sumTotals` | 18 |
 | `quoteRow.logic.test.ts` | `areEqual`（memo 比較）、`getRowFlashClass`、`getSizeFlashClass` | 11 |
 | `lastPrice.logic.test.ts` | `computePriceDirection`、`getDirectionConfig` | 7 |
-| `utils.test.ts` | `formatNumber` 千分位格式化 | 5 |
+| `utils.test.ts` | `formatNumber` 千分位格式化、防禦性 `split` 空陣列 | 6 |
+| `wsAppPingPong.test.ts` | `isWsAppPongMessage`、日誌（`DEV` / `VITE_WS_PING_LOG`）、`startWsAppPingInterval`（**mock `setInterval`** 觸發 tick，見 [TEST.md](./TEST.md)） | 15 |
 
 **範例**：測試 `applyLevels` 正確處理 delta 更新與刪除
 
@@ -124,8 +130,8 @@ it('should remove price levels when size is 0', () => {
 
 | 檔案 | 測試場景 | 測試數 |
 |------|----------|--------|
-| `useOrderBook.test.ts` | 連線、snapshot/delta、seqNum 不連續觸發 resubscribe、斷線；**金融級**：seqNum 跳號、Snapshot Buffer 回放、活動偵測逾時、visibility 恢復、onerror；數據裁剪、crossed orderbook、空數據防禦 | 22 |
-| `useLastPrice.test.ts` | 初始 null、價格方向 up/down/same、邊界、onmessage 空數據、onclose 重連/已 unmount 不排程、onerror、visibilitychange | 13 |
+| `useOrderBook.test.ts` | 連線、snapshot/delta、seqNum 不連續觸發 resubscribe、斷線；**金融級**：seqNum 跳號、Snapshot Buffer 回放、活動偵測逾時、visibility 恢復、onerror；數據裁剪、crossed orderbook、空數據防禦；**`simulateRawMessage('pong')` 早退** | 23 |
+| `useLastPrice.test.ts` | 初始 null、價格方向 up/down/same、**pong 早退**、邊界、onmessage 空數據、10s 活動偵測逾時、onclose 重連/已 unmount 不排程、onerror、visibilitychange | 15 |
 
 **MockWebSocket 使用方式**：
 
@@ -156,7 +162,7 @@ act(() => MockWebSocket.latest.simulateMessage({
 |------|----------|--------|
 | `OrderBookView.test.tsx` | connecting + 空資料 → Loading、有 asks/bids → 顯示 price/size/total、disconnected → Reconnecting badge、LastPrice 顯示 | 6 |
 | `LastPrice.test.tsx` | price=null → "--"、有價格 → 格式化、direction up → ↑、down → ↓、same → 無箭頭 | 5 |
-| `QuoteRow.test.tsx` | price/size/total、千分位格式化、bar 寬度、isNew flash（從 false→true、維持 false）、size flash、sell 側紅色 | 8 |
+| `QuoteRow.test.tsx` | price/size/total、千分位格式化、bar 寬度、isNew flash（從 false→true、維持 false）、**isNew=false 且 side 變更**、size flash、sell 側紅色 | 9 |
 | `OrderBook.test.tsx` | Header、Loading 初始狀態、WS snapshot 後顯示資料 | 3 |
 
 **範例**：驗證 LastPrice 依 direction 顯示箭頭
@@ -227,7 +233,9 @@ it('should show up arrow when direction is up', () => {
 
 ## 8. 測試覆蓋率
 
-執行 `npm run test -- --coverage` 可產生覆蓋率報告。
+執行 `npm run test:coverage` 可產生 v8 報告（納入範圍見 `vite.config.ts` 的 `coverage.exclude`）。
+
+**與效能／維護成本的權衡**（含為何不全用 fake timer 測 25s ping）：請讀 **[TEST.md](./TEST.md)**。
 
 ### 8.1 未覆蓋分支說明（可接受不測試）
 
@@ -238,4 +246,5 @@ it('should show up arrow when direction is up', () => {
 | `useLastPrice.ts` | 21-23 | `connect` 內 `mountedRef.current === false` 時 early return。unmount 時已 clearTimeout(retryTimer)，retry 不會再呼叫 connect，此分支在正常流程下不會進入。 |
 | `useLastPrice.ts` | 40-42 | `trade === undefined`：JSON 不支援 `undefined`，`msg.data[0]` 僅可能為 `null` 或有效值，此條件主要防範 sparse array 等罕見情況。 |
 | `useLastPrice.ts` | 52-54, 55-77 | `onclose`/`onerror`/`handleVisibility` 的 `mountedRef`、`wsRef !== ws` 等 guard：多為競態防護，需精確模擬 unmount 時序，測試成本高。 |
-| `utils.ts` | 3 | `formatNumber` 中 `n < 0` 的分支：本專案價量皆非負數，可視為防禦性分支。 |
+
+`utils.ts` 之 `parts[0] ?? '0'` 防禦分支已以 `String.prototype.split` mock 覆蓋；`wsAppPingPong.ts` 之 ping/pong 日誌與週期邏輯見 `wsAppPingPong.test.ts`。

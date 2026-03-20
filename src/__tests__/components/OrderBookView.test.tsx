@@ -1,15 +1,17 @@
+import type { ReactElement } from 'react';
 import { describe, it, expect } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import OrderBookView from '../../components/OrderBookView';
 
 const mockAskRows = [
-  { quote: { price: 102, size: 30, total: 60 }, side: 'sell' as const, barPercent: 40, prevSize: undefined, isNew: false },
-  { quote: { price: 101, size: 20, total: 30 }, side: 'sell' as const, barPercent: 20, prevSize: undefined, isNew: false },
+  { quote: { price: 102, size: 30, total: 60, barPercent: 40 }, side: 'sell' as const, barPercent: 40, prevSize: undefined, isNew: false },
+  { quote: { price: 101, size: 20, total: 30, barPercent: 20 }, side: 'sell' as const, barPercent: 20, prevSize: undefined, isNew: false },
 ];
 
 const mockBidRows = [
-  { quote: { price: 99, size: 25, total: 25 }, side: 'buy' as const, barPercent: 30, prevSize: undefined, isNew: false },
-  { quote: { price: 98, size: 15, total: 40 }, side: 'buy' as const, barPercent: 50, prevSize: undefined, isNew: false },
+  { quote: { price: 99, size: 25, total: 25, barPercent: 30 }, side: 'buy' as const, barPercent: 30, prevSize: undefined, isNew: false },
+  { quote: { price: 98, size: 15, total: 40, barPercent: 50 }, side: 'buy' as const, barPercent: 50, prevSize: undefined, isNew: false },
 ];
 
 const defaultProps = {
@@ -20,9 +22,13 @@ const defaultProps = {
   status: 'connected' as const,
 };
 
+function renderView(ui: ReactElement) {
+  return render(<MemoryRouter>{ui}</MemoryRouter>);
+}
+
 describe('OrderBookView', () => {
   it('should show loading spinner when connecting with no data', () => {
-    render(
+    renderView(
       <OrderBookView
         {...defaultProps}
         status="connecting"
@@ -34,7 +40,7 @@ describe('OrderBookView', () => {
   });
 
   it('should render ask and bid prices', () => {
-    render(<OrderBookView {...defaultProps} />);
+    renderView(<OrderBookView {...defaultProps} />);
     expect(screen.getByText('102')).toBeInTheDocument();
     expect(screen.getByText('101')).toBeInTheDocument();
     expect(screen.getByText('99')).toBeInTheDocument();
@@ -42,23 +48,23 @@ describe('OrderBookView', () => {
   });
 
   it('should render sizes and totals', () => {
-    render(<OrderBookView {...defaultProps} />);
+    renderView(<OrderBookView {...defaultProps} />);
     expect(screen.getAllByText('30').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('60')).toBeInTheDocument();
   });
 
   it('should show Reconnecting badge when disconnected', () => {
-    render(<OrderBookView {...defaultProps} status="disconnected" />);
+    renderView(<OrderBookView {...defaultProps} status="disconnected" />);
     expect(screen.getByText('Reconnecting...')).toBeInTheDocument();
   });
 
   it('should show Connecting badge when reconnecting with stale data', () => {
-    render(<OrderBookView {...defaultProps} status="connecting" />);
+    renderView(<OrderBookView {...defaultProps} status="connecting" />);
     expect(screen.getByText('Connecting...')).toBeInTheDocument();
   });
 
   it('should show last price with arrow', () => {
-    render(<OrderBookView {...defaultProps} />);
+    renderView(<OrderBookView {...defaultProps} />);
     expect(screen.getByText('100.5')).toBeInTheDocument();
     expect(screen.getByText('↑')).toBeInTheDocument();
   });

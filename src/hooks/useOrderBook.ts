@@ -19,6 +19,14 @@ import {
   logWsAppPongReceived,
   startWsAppPingInterval,
 } from '../ws/wsAppPingPong';
+import {
+  socketHealthMarkClosed,
+  socketHealthMarkConnecting,
+  socketHealthMarkInbound,
+  socketHealthMarkOpen,
+  socketHealthMarkPingSent,
+  socketHealthMarkPong,
+} from '../socketHealth/socketHealthStore';
 
 const BATCH_INTERVAL = 50;
 const WS_PING_CHANNEL = 'orderbook OSS (/ws/oss/futures)';
@@ -102,6 +110,7 @@ export function useOrderBook() {
 
     const ws = new WebSocket(WS_ORDERBOOK_URL);
     wsRef.current = ws;
+    socketHealthMarkConnecting('orderbook');
 
     let disposeAppPing: (() => void) | undefined;
 
@@ -115,17 +124,22 @@ export function useOrderBook() {
     ws.onopen = () => {
       retryCount.current = 0;
       setStatus('connected');
+      socketHealthMarkOpen('orderbook', topicRef.current);
       ws.send(JSON.stringify({ op: 'subscribe', args: [topicRef.current] }));
       resetActivityTimer();
       disposeAppPing?.();
-      disposeAppPing = startWsAppPingInterval(ws, WS_PING_CHANNEL);
+      disposeAppPing = startWsAppPingInterval(ws, WS_PING_CHANNEL, {
+        onPingSent: () => socketHealthMarkPingSent('orderbook'),
+      });
     };
 
     ws.onmessage = (event: MessageEvent) => {
       if (wsRef.current !== ws) return;
       resetActivityTimer();
+      socketHealthMarkInbound('orderbook');
 
       if (isWsAppPongMessage(event.data)) {
+        socketHealthMarkPong('orderbook');
         logWsAppPongReceived(WS_PING_CHANNEL);
         return;
       }
@@ -198,6 +212,10 @@ export function useOrderBook() {
       disposeAppPing?.();
       disposeAppPing = undefined;
       clearTimeout(activityTimerRef.current);
+      // 被新連線取代的舊 socket 關閉時不寫入（避免誤標為斷線）；unmount 時 wsRef 已清空仍記錄斷線
+      if (wsRef.current === ws || wsRef.current === null) {
+        socketHealthMarkClosed('orderbook');
+      }
       if (!mountedRef.current) return;
       if (wsRef.current !== ws) return;
 

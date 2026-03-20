@@ -34,13 +34,23 @@ export function logWsAppPongReceived(channel: string): void {
   }
 }
 
+export interface WsAppPingIntervalOptions {
+  /** 每次嘗試送出 ping 後呼叫（不含 readyState 非 OPEN 的略過）；供診斷頁等 O(1) 記錄用 */
+  onPingSent?: () => void;
+}
+
 /**
  * 週期送出 ping。請在 onclose / 換線時呼叫回傳的 dispose。
  */
-export function startWsAppPingInterval(ws: WebSocket, channel: string): () => void {
+export function startWsAppPingInterval(
+  ws: WebSocket,
+  channel: string,
+  opts?: WsAppPingIntervalOptions
+): () => void {
   const tick = () => {
     if (ws.readyState === WebSocket.OPEN) {
       logWsAppPingSent(channel);
+      opts?.onPingSent?.();
       try {
         ws.send(WS_APP_PING_TEXT);
       } catch {
@@ -49,5 +59,7 @@ export function startWsAppPingInterval(ws: WebSocket, channel: string): () => vo
     }
   };
   const id = window.setInterval(tick, WS_APP_PING_INTERVAL_MS);
+  /** 連線後盡快送第一次 ping（原先僅 setInterval，首包需等 25s，診斷圖會長時間空白） */
+  queueMicrotask(tick);
   return () => window.clearInterval(id);
 }

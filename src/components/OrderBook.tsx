@@ -1,6 +1,5 @@
 import { useRef, useEffect, useMemo } from 'react';
-import { useOrderBook } from '../hooks/useOrderBook';
-import { useLastPrice } from '../hooks/useLastPrice';
+import { useOrderBookRuntime } from '../context/OrderBookRuntimeContext';
 import {
   buildSnapshot,
   computeIsNew,
@@ -10,8 +9,8 @@ import type { PrevSnapshot } from '../logic/orderBook.logic';
 import OrderBookView from './OrderBookView';
 
 export default function OrderBook() {
-  const { asks, bids, status } = useOrderBook();
-  const lastPrice = useLastPrice();
+  const { orderBook, lastPrice } = useOrderBookRuntime();
+  const { asks, bids, status } = orderBook;
   const committedRef = useRef<PrevSnapshot | null>(null);
 
   const prev = committedRef.current;

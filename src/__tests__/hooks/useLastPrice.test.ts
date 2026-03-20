@@ -212,7 +212,7 @@ describe('useLastPrice', () => {
 
   describe('onerror', () => {
     it('should close connection on error (triggering onclose)', () => {
-      const { result, unmount } = renderHook(() => useLastPrice());
+      const { unmount } = renderHook(() => useLastPrice());
       const ws = MockWebSocket.latest;
 
       act(() => ws.simulateOpen());
@@ -228,7 +228,6 @@ describe('useLastPrice', () => {
   describe('visibilitychange 恢復連線', () => {
     it('should reconnect when tab becomes visible and WS is not open', async () => {
       const { unmount } = renderHook(() => useLastPrice());
-      const ws = MockWebSocket.latest;
 
       Object.defineProperty(document, 'visibilityState', {
         configurable: true,

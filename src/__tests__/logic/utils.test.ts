@@ -24,9 +24,11 @@ describe('formatNumber', () => {
 
   it('當 split 回傳空陣列時 intPart 退回 0（防禦分支）', () => {
     const splitSpy = vi.spyOn(String.prototype, 'split').mockImplementation(function (this: string, sep?: string) {
-      if (sep === '.') return [] as unknown as string[];
-      return String.prototype.split.call(this, sep);
-    });
+      if (sep === '.') return [];
+      const orig = String.prototype.split as (this: string, separator?: string) => string[];
+      return orig.call(this, sep);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Vitest + TS 對 String#split 重載過嚴
+    } as any);
     expect(formatNumber(42)).toBe('0');
     splitSpy.mockRestore();
   });

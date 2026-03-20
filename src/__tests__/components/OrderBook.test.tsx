@@ -1,6 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { ReactElement } from 'react';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup, act } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import OrderBook from '../../components/OrderBook';
+import { OrderBookRuntimeProvider } from '../../context/OrderBookRuntimeContext';
 import {
   MockWebSocket,
   installMockWebSocket,
@@ -31,6 +34,14 @@ function makeTrade(price: number) {
   };
 }
 
+function renderWithRuntime(ui: ReactElement) {
+  return render(
+    <MemoryRouter initialEntries={['/']}>
+      <OrderBookRuntimeProvider>{ui}</OrderBookRuntimeProvider>
+    </MemoryRouter>
+  );
+}
+
 describe('OrderBook (Container Integration)', () => {
   beforeEach(() => {
     installMockWebSocket();
@@ -42,17 +53,17 @@ describe('OrderBook (Container Integration)', () => {
   });
 
   it('should show Order Book header', () => {
-    render(<OrderBook />);
+    renderWithRuntime(<OrderBook />);
     expect(screen.getAllByText('Order Book').length).toBeGreaterThanOrEqual(1);
   });
 
   it('should show loading state initially', () => {
-    render(<OrderBook />);
+    renderWithRuntime(<OrderBook />);
     expect(screen.getAllByText('Loading order book...').length).toBeGreaterThanOrEqual(1);
   });
 
   it('should render order book data after WS snapshot', () => {
-    render(<OrderBook />);
+    renderWithRuntime(<OrderBook />);
 
     act(() => {
       for (const ws of MockWebSocket.instances) {

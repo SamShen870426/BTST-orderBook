@@ -3,7 +3,7 @@ import { areEqual, getRowFlashClass, getSizeFlashClass } from '../../logic/quote
 import type { QuoteRowProps } from '../../logic/quoteRow.logic';
 
 const baseProps: QuoteRowProps = {
-  quote: { price: 100, size: 10, total: 50 },
+  quote: { price: 100, size: 10, total: 50, barPercent: 20 },
   side: 'buy',
   barPercent: 20.1,
   prevSize: 8,
