@@ -25,7 +25,7 @@
 | 面向 | 說明 |
 |------|------|
 | **領域** | 真實行情 WS：`snapshot` / `delta`、`seqNum` 連續性、重訂閱與空窗期緩衝 |
-| **效能** | 50ms batching、`memo` + 自訂 `areEqual`、深度條分母與 `barPercent` 在 flush 內一次算完 |
+| **效能** | 50ms batching(可動態調整 useOrderBook.ts <img width="218" height="27" alt="image" src="https://github.com/user-attachments/assets/89e4bce7-2d52-4f50-a0ff-11e9dd929ab5" />)、`memo` + 自訂 `areEqual`、深度條分母與 `barPercent` 在 flush 內一次算完 |
 | **正確性** | `Decimal.js` 處理價量；crossed book / seq 斷裂觸發恢復流程 |
 | **韌性** | 應用層 ping/pong、活動偵測、指數退避重連、Tab 可見性、`wsRef` race 防護 |
 | **可測試性** | `logic/` 純函數與 React 分層；**125** 則測試（Vitest + Testing Library） |
