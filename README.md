@@ -15,6 +15,11 @@
 
 ---
 
+<div align="center">
+  <video src="https://github.com/user-attachments/assets/96d15f22-ec32-46c2-a027-c58e2541d8db" width="800px" autoplay loop muted playsinline></video>
+</div>
+
+
 ## 給審閱者的重點（TL;DR）
 
 | 面向 | 說明 |
@@ -39,6 +44,12 @@
 - **程式碼分割** — 診斷頁與圖表以 `React.lazy` 載入，減輕首屏 bundle  
 
 ---
+
+### 🛡️ WebSocket 健康診斷 (Tool Page  **/socket-health**)
+<div align="center">
+  <video src="https://github.com/user-attachments/assets/d29f4a32-3192-4e37-9e1f-e9494c964bd2" width="600px" autoplay loop muted playsinline></video>
+  <p><em>內建遠測監控：即時追蹤 Throughput、JS Heap 記憶體足跡與 RTT 心跳延遲趨勢。</em></p>
+</div>
 
 ## 技術棧
 
