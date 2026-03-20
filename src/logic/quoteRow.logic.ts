@@ -14,6 +14,7 @@ export function areEqual(prev: QuoteRowProps, next: QuoteRowProps): boolean {
     prev.quote.price === next.quote.price &&
     prev.quote.size === next.quote.size &&
     prev.quote.total === next.quote.total &&
+    prev.quote.barPercent === next.quote.barPercent &&
     prev.side === next.side &&
     prev.barPercent === next.barPercent &&
     prev.prevSize === next.prevSize &&

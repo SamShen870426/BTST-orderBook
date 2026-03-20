@@ -31,6 +31,8 @@ export interface QuoteLevel {
   price: number;
   size: number;
   total: number;
+  /** 深度條寬度百分比：當前行 total / 分母（買賣兩側 8 筆累計總量取較大者），由 applyDepthBarPercent 計算 */
+  barPercent: number;
 }
 
 export type PriceDirection = 'up' | 'down' | 'same';

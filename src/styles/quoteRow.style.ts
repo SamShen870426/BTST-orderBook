@@ -65,6 +65,16 @@ export const Bar = styled.div.attrs<{ $width: number; $color: string }>(
   transition: width 0.3s ease;
 `;
 
+/** Total 欄位容器：深度條僅在此區域內顯示，不延伸至 Price/Size */
+export const TotalCellWrapper = styled.div`
+  position: relative;
+  flex: 0 0 120px;
+  width: 120px;
+  min-width: 120px;
+  padding-left: 8px;
+  box-sizing: border-box;
+`;
+
 const CellBase = styled.span`
   text-align: right;
   font-size: 13px;
@@ -80,38 +90,60 @@ export const PriceCell = styled(CellBase).attrs<{ $color: string }>(
     style: { color: $color },
   })
 )`
+  display: block;
+  flex: 0 0 120px;
   width: 120px;
   min-width: 120px;
+  box-sizing: border-box;
   text-align: left;
 `;
 
 export const SizeCell = styled(CellBase)<{ $flash?: FlashName }>`
+  display: block;
+  flex: 0 0 100px;
   width: 100px;
   min-width: 100px;
+  box-sizing: border-box;
   border-radius: 2px;
   padding: 1px 4px;
+  text-align: right;
   ${({ $flash }) => flashAnimation($flash)}
 `;
 
 export const TotalCell = styled(CellBase)`
-  width: 120px;
-  min-width: 120px;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  text-align: right;
 `;
 
 export const HeadCell = styled(CellBase)``;
 
 export const HeadPriceCell = styled(HeadCell)`
+  display: block;
+  flex: 0 0 120px;
   width: 120px;
   min-width: 120px;
+  box-sizing: border-box;
   text-align: left;
 `;
 
 export const HeadSizeCell = styled(HeadCell)`
+  display: block;
+  flex: 0 0 100px;
   width: 100px;
   min-width: 100px;
+  box-sizing: border-box;
+  text-align: right;
 `;
 
 export const HeadTotalCell = styled(HeadCell)`
+  display: block;
+  flex: 0 0 120px;
   width: 120px;
   min-width: 120px;
+  padding-left: 8px;
+  box-sizing: border-box;
+  text-align: right;
 `;

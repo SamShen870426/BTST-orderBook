@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
   applyLevels,
+  applyDepthBarPercent,
   buildQuoteLevels,
   computeBarPercent,
+  getDepthBarDenominator,
   buildSnapshot,
   computeIsNew,
   getPrevSize,
@@ -89,6 +91,53 @@ describe('buildQuoteLevels', () => {
     expect(levels.length).toBe(1);
     expect(levels[0]!.price).toBe(101);
   });
+
+  it('should leave barPercent at 0 until applyDepthBarPercent', () => {
+    const map: PriceMap = new Map([
+      [100, 10],
+      [101, 20],
+      [102, 30],
+    ]);
+    const raw = buildQuoteLevels(map, 'sell', 3);
+    expect(raw[0]!.barPercent).toBe(0);
+    const denom = getDepthBarDenominator(raw, []);
+    expect(denom).toBe(60);
+    const levels = applyDepthBarPercent(raw, denom);
+    expect(levels[0]!.total).toBe(60);
+    expect(levels[0]!.barPercent).toBe(100);
+    expect(levels[1]!.barPercent).toBeCloseTo(50, 0);
+    expect(levels[2]!.barPercent).toBeCloseTo(16.7, 0);
+  });
+});
+
+describe('getDepthBarDenominator', () => {
+  it('should use max of ask-side and bid-side cumulative totals', () => {
+    const askMap: PriceMap = new Map([
+      [100, 10],
+      [101, 20],
+      [102, 30],
+    ]);
+    const bidMap: PriceMap = new Map([
+      [99, 5],
+      [98, 15],
+    ]);
+    const asks = buildQuoteLevels(askMap, 'sell', 3);
+    const bids = buildQuoteLevels(bidMap, 'buy', 2);
+    expect(getDepthBarDenominator(asks, bids)).toBe(60);
+  });
+
+  it('should use bid total when bid max exceeds ask max', () => {
+    const asks = buildQuoteLevels(new Map([[100, 10]]), 'sell', 1);
+    const bids = buildQuoteLevels(
+      new Map([
+        [99, 50],
+        [98, 50],
+      ]),
+      'buy',
+      2
+    );
+    expect(getDepthBarDenominator(asks, bids)).toBe(100);
+  });
 });
 
 describe('computeBarPercent', () => {
@@ -96,23 +145,23 @@ describe('computeBarPercent', () => {
     expect(computeBarPercent(26911, 133693)).toBeCloseTo(20.1, 1);
   });
 
-  it('should return 0 when sumTotals is 0', () => {
+  it('should return 0 when maxTotal is 0', () => {
     expect(computeBarPercent(100, 0)).toBe(0);
   });
 
-  it('should return 0 when sumTotals is negative', () => {
+  it('should return 0 when maxTotal is negative', () => {
     expect(computeBarPercent(100, -1)).toBe(0);
   });
 });
 
 describe('buildSnapshot / computeIsNew / getPrevSize', () => {
   const asks = [
-    { price: 100, size: 10, total: 10 },
-    { price: 101, size: 20, total: 30 },
+    { price: 100, size: 10, total: 10, barPercent: 33.3 },
+    { price: 101, size: 20, total: 30, barPercent: 100 },
   ];
   const bids = [
-    { price: 99, size: 5, total: 5 },
-    { price: 98, size: 15, total: 20 },
+    { price: 99, size: 5, total: 5, barPercent: 25 },
+    { price: 98, size: 15, total: 20, barPercent: 100 },
   ];
   const snapshot = buildSnapshot(asks, bids);
 
@@ -139,8 +188,8 @@ describe('buildSnapshot / computeIsNew / getPrevSize', () => {
 describe('sumTotals', () => {
   it('should sum all total values', () => {
     const quotes = [
-      { price: 100, size: 10, total: 100 },
-      { price: 101, size: 20, total: 200 },
+      { price: 100, size: 10, total: 100, barPercent: 33.3 },
+      { price: 101, size: 20, total: 200, barPercent: 100 },
     ];
     expect(sumTotals(quotes)).toBe(300);
   });

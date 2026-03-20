@@ -1,6 +1,6 @@
 # Order Book — 測試指南
 
-> 本專案採用 **分層測試架構**，對應系統架構的 logic / hooks / components 三層，共 **95 個測試** 全數通過。**Lines 覆蓋率 100%**。
+> 本專案採用 **分層測試架構**，對應系統架構的 logic / hooks / components 三層，共 **98 個測試** 全數通過。**Lines 覆蓋率 100%**（執行 `npm run test -- --coverage` 可產生報告）。
 
 ---
 
@@ -27,7 +27,7 @@ npm run test:watch
  RUN  v4.1.0 C:/SBK/Frontend/order-book
 
  Test Files  10 passed (10)
-      Tests  95 passed (95)
+      Tests  98 passed (98)
 ```
 
 ---
@@ -46,13 +46,13 @@ npm run test:watch
         ┌─────────────────────────────────────────────┐
         │  L2: Hook Tests（整合 + Mock WebSocket）     │
         │  useOrderBook / useLastPrice                 │
-        │  共 30 個測試                                 │
+        │  共 35 個測試                                 │
         └─────────────────────────────────────────────┘
                               ▲
         ┌─────────────────────────────────────────────┐
         │  L1: Unit Tests（純函數）                    │
         │  logic/*.logic.ts / utils.ts                 │
-        │  共 42 個測試                                 │
+        │  共 41 個測試                                 │
         └─────────────────────────────────────────────┘
 ```
 
@@ -62,7 +62,7 @@ npm run test:watch
 | **L2** | 驗證 hooks 與 WebSocket 互動、狀態流轉 | Vitest + MockWebSocket + renderHook |
 | **L3** | 驗證 UI 渲染與使用者互動 | Vitest + React Testing Library |
 
-**數量**：L1 共 38 個、L2 共 35 個、L3 共 22 個。
+**數量**：L1 共 41 個、L2 共 35 個、L3 共 22 個（合計 98）。
 
 ---
 
@@ -75,13 +75,13 @@ src/__tests__/
 │   └── MockWebSocket.ts         # L2/L3 共用：模擬 WebSocket 行為
 │
 ├── logic/                       ← L1：純函數單元測試
-│   ├── orderBook.logic.test.ts  # 15 tests：applyLevels, buildQuoteLevels, computeBarPercent...
+│   ├── orderBook.logic.test.ts  # 18 tests：applyLevels, buildQuoteLevels, getDepthBarDenominator, applyDepthBarPercent, computeBarPercent...
 │   ├── quoteRow.logic.test.ts   # 11 tests：areEqual, getRowFlashClass, getSizeFlashClass
 │   ├── lastPrice.logic.test.ts  # 7 tests：computePriceDirection, getDirectionConfig
 │   └── utils.test.ts            # 5 tests：formatNumber
 │
 ├── hooks/                       ← L2：Hooks 整合測試（Mock WebSocket）
-│   ├── useOrderBook.test.ts     # 18 tests：連線、seqNum、重連、grouping、金融級場景（seqNum 連續性、snapshot/delta、數據裁剪、空數據防禦）
+│   ├── useOrderBook.test.ts     # 22 tests：連線、seqNum、重連、金融級場景（seqNum 連續性、Snapshot Buffer、snapshot/delta、數據裁剪、活動偵測、visibility、onerror 等）
 │   └── useLastPrice.test.ts     # 12 tests：價格更新、方向判定、邊界、重連、visibilitychange
 │
 └── components/                  ← L3：元件渲染測試
@@ -101,7 +101,7 @@ src/__tests__/
 
 | 檔案 | 覆蓋內容 | 測試數 |
 |------|----------|--------|
-| `orderBook.logic.test.ts` | `applyLevels`、`buildQuoteLevels`、`computeBarPercent`、`buildSnapshot`、`computeIsNew`、`getPrevSize`、`sumTotals` | 15 |
+| `orderBook.logic.test.ts` | `applyLevels`、`buildQuoteLevels`、`getDepthBarDenominator`、`applyDepthBarPercent`、`computeBarPercent`、`buildSnapshot`、`computeIsNew`、`getPrevSize`、`sumTotals` | 18 |
 | `quoteRow.logic.test.ts` | `areEqual`（memo 比較）、`getRowFlashClass`、`getSizeFlashClass` | 11 |
 | `lastPrice.logic.test.ts` | `computePriceDirection`、`getDirectionConfig` | 7 |
 | `utils.test.ts` | `formatNumber` 千分位格式化 | 5 |
@@ -154,7 +154,7 @@ act(() => MockWebSocket.latest.simulateMessage({
 
 | 檔案 | 測試場景 | 測試數 |
 |------|----------|--------|
-| `OrderBookView.test.tsx` | connecting + 空資料 → Loading、有 asks/bids → 顯示 price/size/total、disconnected → Reconnecting badge、點擊 grouping → onGroupChange、LastPrice 顯示 | 8 |
+| `OrderBookView.test.tsx` | connecting + 空資料 → Loading、有 asks/bids → 顯示 price/size/total、disconnected → Reconnecting badge、LastPrice 顯示 | 6 |
 | `LastPrice.test.tsx` | price=null → "--"、有價格 → 格式化、direction up → ↑、down → ↓、same → 無箭頭 | 5 |
 | `QuoteRow.test.tsx` | price/size/total、千分位格式化、bar 寬度、isNew flash（從 false→true、維持 false）、size flash、sell 側紅色 | 8 |
 | `OrderBook.test.tsx` | Header、Loading 初始狀態、WS snapshot 後顯示資料 | 3 |
@@ -196,6 +196,12 @@ it('should show up arrow when direction is up', () => {
 
 - **`.gitignore`**：新增 `node_modules/`、`dist/`、`.env` 等，避免將依賴與建置產物上傳版本庫。
 - **Vitest 設定**：`vite.config.ts` 已設定 `environment: 'jsdom'`、`globals: true`、`setupFiles` 引入 jest-dom matchers。
+
+### 5.5 深度條與 UI 對齊（與測試對應）
+
+- **分母**：`getDepthBarDenominator` 取買／賣兩側 8 筆累計總量之較大者；`applyDepthBarPercent` 對兩邊列套用同一分母。相關單元測試見 `orderBook.logic.test.ts`（`getDepthBarDenominator` describe）。
+- **flush 整合**：`useOrderBook` 內 `buildQuoteLevels` → `getDepthBarDenominator` → `applyDepthBarPercent`，行為由 L2 hooks 測試覆蓋整體資料流。
+- **QuoteLevel**：`barPercent` 由上述流程寫入；L3 `QuoteRow` / `OrderBookView` 測試使用含 `barPercent` 的 mock `quote`。
 
 ---
 

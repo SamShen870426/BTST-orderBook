@@ -3,10 +3,8 @@ import { useOrderBook } from '../hooks/useOrderBook';
 import { useLastPrice } from '../hooks/useLastPrice';
 import {
   buildSnapshot,
-  computeBarPercent,
   computeIsNew,
   getPrevSize,
-  sumTotals,
 } from '../logic/orderBook.logic';
 import type { PrevSnapshot } from '../logic/orderBook.logic';
 import OrderBookView from './OrderBookView';
@@ -22,19 +20,16 @@ export default function OrderBook() {
     committedRef.current = buildSnapshot(asks, bids);
   }, [asks, bids]);
 
-  const sumAsk = useMemo(() => sumTotals(asks), [asks]);
-  const sumBid = useMemo(() => sumTotals(bids), [bids]);
-
   const askRows = useMemo(
     () =>
       asks.map((quote) => ({
         quote,
         side: 'sell' as const,
-        barPercent: computeBarPercent(quote.total, sumAsk),
+        barPercent: quote.barPercent,
         prevSize: getPrevSize(prev, quote.price, 'sell'),
         isNew: computeIsNew(prev, quote.price, 'sell'),
       })),
-    [asks, sumAsk, prev]
+    [asks, prev]
   );
 
   const bidRows = useMemo(
@@ -42,11 +37,11 @@ export default function OrderBook() {
       bids.map((quote) => ({
         quote,
         side: 'buy' as const,
-        barPercent: computeBarPercent(quote.total, sumBid),
+        barPercent: quote.barPercent,
         prevSize: getPrevSize(prev, quote.price, 'buy'),
         isNew: computeIsNew(prev, quote.price, 'buy'),
       })),
-    [bids, sumBid, prev]
+    [bids, prev]
   );
 
   return (

@@ -3,7 +3,7 @@ import { render, screen, cleanup, act } from '@testing-library/react';
 import QuoteRow from '../../components/QuoteRow';
 
 const baseProps = {
-  quote: { price: 100, size: 10, total: 50 },
+  quote: { price: 100, size: 10, total: 50, barPercent: 20 },
   side: 'buy' as const,
   barPercent: 20,
   prevSize: undefined as number | undefined,
@@ -26,7 +26,7 @@ describe('QuoteRow', () => {
     render(
       <QuoteRow
         {...baseProps}
-        quote={{ price: 75234.5, size: 1234, total: 56789 }}
+        quote={{ price: 75234.5, size: 1234, total: 56789, barPercent: 80 }}
       />
     );
     expect(screen.getByText('75,234.5')).toBeInTheDocument();
@@ -48,7 +48,11 @@ describe('QuoteRow', () => {
 
   it('should render size flash when prevSize differs', () => {
     render(
-      <QuoteRow {...baseProps} quote={{ ...baseProps.quote, size: 15 }} prevSize={5} />
+      <QuoteRow
+        {...baseProps}
+        quote={{ ...baseProps.quote, size: 15, barPercent: 25 }}
+        prevSize={5}
+      />
     );
     expect(screen.getByText('15')).toBeInTheDocument();
     expect(screen.getByText('50')).toBeInTheDocument();
@@ -69,7 +73,9 @@ describe('QuoteRow', () => {
   it('should not flash when isNew 維持 false 且非首次 render', () => {
     const { rerender } = render(<QuoteRow {...baseProps} isNew={false} />);
     act(() => {
-      rerender(<QuoteRow {...baseProps} quote={{ ...baseProps.quote, total: 60 }} isNew={false} />);
+      rerender(
+        <QuoteRow {...baseProps} quote={{ ...baseProps.quote, total: 60, barPercent: 30 }} isNew={false} />
+      );
     });
     act(() => {});
     expect(screen.getByText('100')).toBeInTheDocument();

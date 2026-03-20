@@ -1,7 +1,12 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import type { OrderBookWsMessage, OrderBookData } from '../types';
 import { WS_ORDERBOOK_URL, getOrderBookTopic, MAX_DISPLAY_ROWS } from '../constants';
-import { applyLevels, buildQuoteLevels } from '../logic/orderBook.logic';
+import {
+  applyLevels,
+  applyDepthBarPercent,
+  buildQuoteLevels,
+  getDepthBarDenominator,
+} from '../logic/orderBook.logic';
 import type { PriceMap } from '../logic/orderBook.logic';
 import type { QuoteLevel } from '../types';
 
@@ -46,11 +51,16 @@ export function useOrderBook() {
   }, []);
 
   const flush = useCallback(() => {
-    setOrderBook((prev) => ({
-      asks: buildQuoteLevels(asksMap.current, 'sell', MAX_DISPLAY_ROWS),
-      bids: buildQuoteLevels(bidsMap.current, 'buy', MAX_DISPLAY_ROWS),
-      status: prev.status,
-    }));
+    setOrderBook((prev) => {
+      const asksRaw = buildQuoteLevels(asksMap.current, 'sell', MAX_DISPLAY_ROWS);
+      const bidsRaw = buildQuoteLevels(bidsMap.current, 'buy', MAX_DISPLAY_ROWS);
+      const denom = getDepthBarDenominator(asksRaw, bidsRaw);
+      return {
+        asks: applyDepthBarPercent(asksRaw, denom),
+        bids: applyDepthBarPercent(bidsRaw, denom),
+        status: prev.status,
+      };
+    });
   }, []);
 
   const clearBookState = useCallback(() => {

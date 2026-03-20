@@ -46,10 +46,12 @@ function QuoteRowInner({ quote, side, barPercent, prevSize, isNew }: QuoteRowPro
 
   return (
     <S.Row $flash={rowFlash}>
-      <S.Bar $width={barPercent} $color={barColor} />
       <S.PriceCell $color={priceColor}>{formatNumber(quote.price)}</S.PriceCell>
       <S.SizeCell $flash={sizeFlash}>{formatNumber(quote.size)}</S.SizeCell>
-      <S.TotalCell>{formatNumber(quote.total)}</S.TotalCell>
+      <S.TotalCellWrapper>
+        <S.Bar $width={barPercent} $color={barColor} />
+        <S.TotalCell>{formatNumber(quote.total)}</S.TotalCell>
+      </S.TotalCellWrapper>
     </S.Row>
   );
 }
