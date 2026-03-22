@@ -1,6 +1,7 @@
 import { Suspense, lazy } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import OrderBook from './components/OrderBook';
+import { EngineeringDiagnosticHotkey } from './components/EngineeringDiagnosticHotkey';
 
 const SocketHealthPage = lazy(() => import('./pages/SocketHealthPage'));
 
@@ -22,16 +23,19 @@ const socketHealthFallback = (
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={<OrderBook />} />
-      <Route
-        path="/socket-health"
-        element={
-          <Suspense fallback={socketHealthFallback}>
-            <SocketHealthPage />
-          </Suspense>
-        }
-      />
-    </Routes>
+    <>
+      <EngineeringDiagnosticHotkey />
+      <Routes>
+        <Route path="/" element={<OrderBook />} />
+        <Route
+          path="/socket-health"
+          element={
+            <Suspense fallback={socketHealthFallback}>
+              <SocketHealthPage />
+            </Suspense>
+          }
+        />
+      </Routes>
+    </>
   );
 }
