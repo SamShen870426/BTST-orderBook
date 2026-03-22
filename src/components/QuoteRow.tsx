@@ -11,13 +11,7 @@ function QuoteRowInner({ quote, side, barPercent, prevSize, isNew }: QuoteRowPro
   const [sizeFlash, setSizeFlash] = useState<FlashName>('');
   const rowTimer = useRef<ReturnType<typeof setTimeout>>();
   const sizeTimer = useRef<ReturnType<typeof setTimeout>>();
-  const isFirstRender = useRef(true);
-
   useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
-    }
     if (!isNew) return;
 
     setRowFlash(getRowFlashClass(side));
