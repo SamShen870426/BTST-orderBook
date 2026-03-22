@@ -38,7 +38,6 @@
 ## 功能一覽
 
 - **委託簿** — 買／賣各 8 檔，價格、單檔量、累計量與深度視覺化；新價位與量變閃爍提示  
-- **價格聚合** — 多組 grouping（API topic `update:BTCPFC_{level}`），切換不需重建 WS  
 - **最新價** — 獨立 Trade History 頻道；漲跌方向與配色  
 - **連線狀態** — Loading / Disconnected、可導向 **`/socket-health` 診斷頁**（Throughput、JS Heap、**RTT 心跳圖**）  
 - **程式碼分割** — 診斷頁與圖表以 `React.lazy` 載入，減輕首屏 bundle  
@@ -110,7 +109,6 @@ npm run test:coverage    # 覆蓋率報告
 | 文件 | 內容 |
 |------|------|
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | 架構圖、資料流、檔案樹、Snapshot buffer、診斷頁與心跳圖語意 |
-| [LEARNING_GUIDE.md](./LEARNING_GUIDE.md) | WebSocket / 委託簿概念入門（若審閱者不熟悉領域） |
 | [WS_APP_HEARTBEAT.md](./WS_APP_HEARTBEAT.md) | 應用層 ping/pong 與 RTT 圖說明 |
 | [TESTING.md](./TESTING.md) | 測試指令與金字塔 |
 
