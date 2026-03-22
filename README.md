@@ -44,7 +44,10 @@
 
 ---
 
-### 🛡️ WebSocket 健康診斷 (Tool Page  **/socket-health**)
+### 🛡️ 系統監測與可觀測性 (Observability)
+
+> **開發者專屬：** 為維持主交易介面簡潔，此診斷頁面採用隱藏入口。請於**首頁**按下快捷鍵 **`Shift + Alt + D`** (Mac: **`Shift + Option + D`**) 進入
+
 <div align="center">
   <video src="https://github.com/user-attachments/assets/d29f4a32-3192-4e37-9e1f-e9494c964bd2" width="600px" autoplay loop muted playsinline></video>
   <p><em>內建遠測監控：即時追蹤 Throughput、JS Heap 記憶體足跡與 RTT 心跳延遲趨勢。</em></p>
