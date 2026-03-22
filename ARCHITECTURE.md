@@ -229,7 +229,7 @@
 
 **路由與狀態**：使用 `react-router-dom`；`OrderBookRuntimeContext` 的 **Provider 掛在 `Routes` 外**（見 `main.tsx`），使從 `/` 切到 `/socket-health` 時 **同一組 WS 不斷線**。診斷頁本體以 **`React.lazy` + `Suspense`** 載入，將 **recharts** 拆成獨立 chunk，減輕首頁 bundle。
 
-**工程師入口（無主畫面連結）**：`App.tsx` 於 `<Routes>` 之上掛載 `EngineeringDiagnosticHotkey`：**Ctrl+Alt+D** 在 `/` 與 `/socket-health` 間 **客戶端切換**（`keydown` 使用 `capture: true` + `preventDefault`）。請勿在網址列硬開診斷路徑，以免整頁重載、WS 重連。
+**工程師入口（無主畫面連結）**：`App.tsx` 於 `<Routes>` 之上掛載 `EngineeringDiagnosticHotkey`：**Shift+Alt+D**（macOS：**Shift+Option+D**，`KeyboardEvent.altKey`）在 `/` 與 `/socket-health` 間 **客戶端切換**（`keydown` 使用 `capture: true` + `preventDefault`）。請勿在網址列硬開診斷路徑，以免整頁重載、WS 重連。
 
 **資料管線（高效）**：
 - `socketHealthStore.ts`：模組級欄位；`useOrderBook` / `useLastPrice` 在 `onopen`／`onmessage`／`onclose`／`onPingSent` 僅做 **O(1) 賦值**（含 `inboundSeq`、pong **RTT** 樣本、throughput 時間戳等），**不**驅動訂單簿 re-render。
@@ -318,7 +318,7 @@ order-book/
 ├── vite.config.ts
 └── src/
     ├── main.tsx                 # BrowserRouter + OrderBookRuntimeProvider
-    ├── App.tsx                  # EngineeringDiagnosticHotkey（Ctrl+Alt+D）+ Routes
+    ├── App.tsx                  # EngineeringDiagnosticHotkey（Shift+Alt+D）+ Routes
     ├── index.css                # 精簡：只保留 CSS reset + body 基礎樣式
     ├── types.ts                 # OrderBookWsMessage / TradeData / QuoteLevel
     ├── constants.ts             # WS URL / Topic / COLORS / GROUPING_OPTIONS
@@ -356,7 +356,7 @@ order-book/
     │   └── useLastPrice.ts      # WS + ping/pong + 活動偵測 + 方向判定 + 重連 + 寫入 socketHealthStore
     │
     ├── components/              ← Container / Presentation 分離
-    │   ├── EngineeringDiagnosticHotkey.tsx  # Ctrl+Alt+D ↔ `/socket-health`（工程師用，無 UI）
+    │   ├── EngineeringDiagnosticHotkey.tsx  # Shift+Alt+D ↔ `/socket-health`（工程師用，無 UI）
     │   ├── OrderBook.tsx        # Container：組合 hooks + logic → props 傳給 View（零 JSX）
     │   ├── OrderBookView.tsx    # Presentation：純 UI + styled-components（零業務邏輯）
     │   ├── QuoteRow.tsx         # Presentation：memo + areEqual + 閃爍動畫

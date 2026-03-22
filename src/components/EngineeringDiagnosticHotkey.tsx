@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 /**
- * 工程師診斷用：不顯示 UI 入口。Ctrl+Alt+D 在 `/` 與 `/socket-health` 間做客戶端切換（不整頁重載）。
+ * 工程師診斷用：不顯示 UI 入口。Shift+Alt+D（macOS：Shift+Option+D）在 `/` 與 `/socket-health` 間做客戶端切換（不整頁重載）。
  */
 export function EngineeringDiagnosticHotkey() {
   const navigate = useNavigate();
@@ -12,7 +12,8 @@ export function EngineeringDiagnosticHotkey() {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (!e.ctrlKey || !e.altKey) return;
+      if (!e.shiftKey || !e.altKey) return;
+      if (e.ctrlKey || e.metaKey) return;
       if (e.key !== 'd' && e.key !== 'D') return;
       e.preventDefault();
       const p = pathnameRef.current;
